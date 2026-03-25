@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calling - Minimal Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">⌁</div>
+          <div>
+            <div class="title">Calling - Minimal Agent</div>
+            <div class="subtitle">Local LLM chat with tools + optional RAG</div>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <aside class="panel conv-panel">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">Conversations</div>
+              <div class="panel-subtitle">History + new chat</div>
+            </div>
+          </div>
+          <div class="conv-body">
+            <button type="button" id="newConvBtn" class="btn primary">New chat</button>
+            <div id="convList" class="conv-list" aria-label="Conversation list"></div>
+          </div>
+        </aside>
+
+        <section class="panel chat-panel">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">Chat</div>
+              <div class="panel-subtitle">20 turns context window enforced server-side</div>
+            </div>
+          </div>
+
+          <div id="messages" class="messages" aria-live="polite"></div>
+
+          <form id="chatForm" class="composer" autocomplete="off">
+            <textarea
+              id="prompt"
+              rows="3"
+              placeholder="Type your message..."
+              spellcheck="false"
+            ></textarea>
+            <div class="composer-actions">
+              <button type="submit" id="sendBtn" class="btn primary">Send</button>
+              <button type="button" id="clearBtn" class="btn">Clear</button>
+            </div>
+          </form>
+          <div id="status" class="status"></div>
+        </section>
+
+        <aside class="panel side-panel">
+          <div class="panel-header">
+            <div class="panel-title">Controls</div>
+            <div class="panel-subtitle">Toggle tools & RAG</div>
+          </div>
+
+          <div class="field">
+            <label for="modelSelect"><b>Model</b></label>
+            <select id="modelSelect" class="input"></select>
+            <input id="modelCustom" class="input" placeholder="Or type a custom model id" />
+          </div>
+
+          <div class="field toggles">
+            <label class="check">
+              <input type="checkbox" id="ragToggle" checked />
+              <span><b>RAG (upload embeddings + per-chat retrieval)</b></span>
+            </label>
+            <label class="check">
+              <input type="checkbox" id="forceSearchToggle" />
+              <span><b>Force web_search before answer</b></span>
+            </label>
+          </div>
+
+          <div class="field">
+            <label><b>Uploads</b></label>
+            <input type="file" id="fileInput" multiple />
+            <button type="button" id="uploadBtn" class="btn">Upload</button>
+            <div id="uploadList" class="upload-list"></div>
+          </div>
+
+          <div class="hint">
+            Tool calling is automatic: the model decides when to call <code>web_search</code> or <code>read_file</code>.
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+

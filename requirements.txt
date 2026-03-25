@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+openai
+duckduckgo-search
+python-multipart
+numpy
+google-genai
+anthropic
+requests

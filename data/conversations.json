@@ -1,0 +1,144 @@
+{
+  "86dcc53501e5419abe3053888fac6362": {
+    "title": "New chat",
+    "updated_at": 1774429432.5375342,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "b2e00f2d207341dfae998fa7113137aa": {
+    "title": "New chat",
+    "updated_at": 1774429642.386833,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "a123619206fb49f1be529c675ff81790": {
+    "title": "New chat",
+    "updated_at": 1774429643.6745095,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "test-claude3": {
+    "title": "??,??????????",
+    "updated_at": 1774429790.673151,
+    "messages": [
+      {
+        "role": "user",
+        "content": "??,??????????"
+      },
+      {
+        "role": "assistant",
+        "content": "好的，我已经完整阅读了你的项目。下面是 **Calling** 项目的全面介绍：\n\n---\n\n## 项目概览\n\n**Calling** 是一个本地最小化的 LLM 网页对话框（带 Agent 工具调用能力），用 Python (FastAPI) + 纯前端 (HTML/CSS/JS) 构建。\n\n## 架构\n\n```\nfrontend/          → 纯静态前端 (index.html + app.js + styles.css)\nbackend/\n  main.py          → FastAPI 应用入口，定义所有 API 路由\n  agent.py         → 核心：多模型路由 + tool calling 循环（Claude / Gemini / Grok）\n  tools.py         → 两个工具实现：web_search (Tavily→DuckDuckGo) + read_file\n  config.py        → 环境变量加载 → Settings dataclass\n  llm.py           → OpenAI 兼容客户端封装（目前主要被 agent.py 替代）\n  embeddings.py    → Gemini embedding 封装（用于 RAG）\n  rag_store.py     → SQLite 向量存储 + 余弦相似度检索\n  ingest.py        → 文件分块 + embedding 入库\n  conversation_store.py → JSON 文件持久化对话历史\n  util.py          → 工具函数（路径安全、文本分块等）\ndata/\n  conversations.json  → 对话持久化\n  rag.sqlite3         → RAG 向量数据库\n  uploads/            → 上传文件存放\n```\n\n## 核心功能\n\n1. **多模型支持** — 根据 model 名称前缀自动路由：\n   - `claude-*` → Anthropic API（支持官方 + 两个代理端点，自动 fallback）\n   - `gemini-*` → Google GenAI SDK\n   - `grok-*` → xAI API（OpenAI 兼容格式）\n\n2. **Tool Calling（Function Calling）** — 每个模型都有独立的 tool calling 循环（最多 8 轮）：\n   - `web_search`：优先 Tavily API，fallback 到 DuckDuckGo\n   - `read_file`：读取项目目录内文件，`__TREE__` 返回项目树\n\n3. **强制联网开关** — 开启后，模型必须至少调用一次 `web_search`，否则后端会重试最多 3 次\n\n4. **RAG** — 上传文件时可选开启：\n   - 用 Gemini embedding (`gemini-embedding-001`) 做分块向量化\n   - 存入 SQLite，查询时用余弦相似度检索 top-k 片段注入 system prompt\n\n5. **20 轮上下文窗口** — 服务端裁剪，只保留最近 20 轮用户消息及其后的助手回复\n\n6. **对话管理** — 支持多对话创建/切换/持久化，自动用首条用户消息生成标题\n\n## API 路由\n\n| 路由 | 方法 | 功能 |\n|------|------|------|\n| `/` | GET | 返回前端页面 |\n| `/api/models` | GET | 返回可用模型列表 |\n| `/api/conversations/new` | POST | 创建新对话 |\n| `/api/conversations` | GET | 列出所有对话 |\n| `/api/conversations/{id}` | GET | 获取单个对话详情 |\n| `/api/upload` | POST | 上传文件（可选 RAG embedding） |\n| `/api/chat` | POST | 发送消息，返回助手回复 |\n\n## 运行方式\n\n```bash\npip install -r requirements.txt\ncp .env.example .env   # 填入 API key\npython -m backend.main # 访问 http://127.0.0.1:8000/\n```\n\n## 设计特点\n\n- 不依赖向量数据库，RAG 用纯 SQLite + numpy 余弦相似度实现\n- Claude 支持多端点 fallback（官方 + 两个代理），和 Tenshi 项目共用环境变量命名\n- 前端是纯原生 JS，无框架依赖，暗色主题 UI\n- 路径安全：`read_file` 工具严格限制在项目根目录内，拒绝路径穿越\n\n有什么具体想了解或想改的地方？"
+      }
+    ],
+    "uploaded_files": []
+  },
+  "test-grok": {
+    "title": "??? ok?",
+    "updated_at": 1774429801.5985992,
+    "messages": [
+      {
+        "role": "user",
+        "content": "??? ok?"
+      },
+      {
+        "role": "assistant",
+        "content": "Yeah, I'm good! What's up? 😊"
+      }
+    ],
+    "uploaded_files": []
+  },
+  "test-gemini-flash": {
+    "title": "ok",
+    "updated_at": 1774429824.9997666,
+    "messages": [
+      {
+        "role": "user",
+        "content": "ok"
+      },
+      {
+        "role": "assistant",
+        "content": "What can I help you with? I can answer questions, search the web, or read files for you."
+      }
+    ],
+    "uploaded_files": []
+  },
+  "test-grok-force": {
+    "title": "?????:TAVILY ??????????",
+    "updated_at": 1774429847.0954013,
+    "messages": [
+      {
+        "role": "user",
+        "content": "?????:TAVILY ??????????"
+      },
+      {
+        "role": "assistant",
+        "content": "**Tavily 是一个专为 AI 代理和 RAG（Retrieval-Augmented Generation）工作流设计的实时搜索引擎。**\n\n### 关键信息（基于搜索结果）：\n- **官方网站**：https://www.tavily.com/\n- **核心功能**：\n  - 提供快速、安全的 API，用于网页搜索和内容提取。\n  - 专为开发者构建，帮助 AI 代理连接静态语言模型与实时互联网数据。\n  - 支持搜索、提取等功能，优化 LLM（大型语言模型）的使用。\n- **描述**：\"Tavily is the real-time search engine for AI agents and RAG workflows — Fast and secure APIs for web search and content extraction.\"（Tavily 是 AI 代理和 RAG 工作流的实时搜索引擎——快速安全的网页搜索和内容提取 API。）\n- **其他亮点**：\n  - 最近更新包括与 Nebius 合作、在 Cursor 的 MCP 市场上线等（2026 年 2 月动态）。\n  - 开发者入门：https://www.tavily.com/blog/tavily-101-ai-powered-search-for-developers\n\n在 AI 工具（如我使用的 web_search）中，Tavily 被优先作为搜索引擎后端，提供高效、AI 友好的搜索结果。如果你有具体问题（如 API 使用或集成），我可以进一步搜索！"
+      }
+    ],
+    "uploaded_files": []
+  },
+  "871287970f5544ca83243ec5243ac992": {
+    "title": "New chat",
+    "updated_at": 1774429943.8679905,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "749c46df110747dd947fc5361f605c95": {
+    "title": "New chat",
+    "updated_at": 1774429944.3303306,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "bc629df3ab334be093d1db574d41d74e": {
+    "title": "New chat",
+    "updated_at": 1774430132.4681094,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "6db29ab0cf4744c6a4a6f59ee7103947": {
+    "title": "New chat",
+    "updated_at": 1774430147.1700237,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "2982106a4eca45148e5e0503860203b0": {
+    "title": "New chat",
+    "updated_at": 1774430148.7789948,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "fe5fa57f03aa4f7ebb88b02f227f1133": {
+    "title": "New chat",
+    "updated_at": 1774430149.7386212,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "658c315f7780493fb64f2dbc820e5383": {
+    "title": "New chat",
+    "updated_at": 1774430152.2660315,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "c40986d980fa4bcb928d1663c2cbe6ed": {
+    "title": "New chat",
+    "updated_at": 1774430422.8631754,
+    "messages": [],
+    "uploaded_files": []
+  },
+  "test-model-meta": {
+    "title": "ok",
+    "updated_at": 1774430430.0483453,
+    "messages": [
+      {
+        "role": "user",
+        "content": "ok"
+      },
+      {
+        "role": "assistant",
+        "content": "ok, what's up?",
+        "model": "grok-4-1-fast-non-reasoning"
+      }
+    ],
+    "uploaded_files": []
+  }
+}

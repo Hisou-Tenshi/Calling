@@ -1,0 +1,5 @@
+.env
+testapi.py
+__pycache__/
+*.lock
+temp.md
