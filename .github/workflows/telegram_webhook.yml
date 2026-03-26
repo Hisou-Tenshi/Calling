@@ -9,6 +9,10 @@ concurrency:
   group: tenshi-bot
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   handle_message:
     runs-on: ubuntu-latest
@@ -16,7 +20,7 @@ jobs:
       image: ghcr.io/hisou-tenshi/tenshi:latest
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
     steps:
       - name: Checkout Tenshi repo
         uses: actions/checkout@v5
@@ -28,27 +32,31 @@ jobs:
 
       - name: "Guard: wait if perception is running"
         env:
-          GH_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
-          TARGET_REPO: ${{ secrets.GH_REPO }}
+          CALLING_REPO: ${{ github.repository }}
+          TENSHI_REPO: ${{ secrets.GH_REPO }}
+          GH_TOKEN_CALLING: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN_TENSHI: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
         run: |
           python - <<'PY'
           import json, os, time, urllib.request
 
-          repo = os.environ.get("TARGET_REPO", "")
           run_id = os.environ.get("GITHUB_RUN_ID", "")
-          token = os.environ.get("GH_TOKEN", "")
+          calling_repo = os.environ.get("CALLING_REPO", "")
+          tenshi_repo = os.environ.get("TENSHI_REPO", "")
+          token_calling = os.environ.get("GH_TOKEN_CALLING", "")
+          token_tenshi = os.environ.get("GH_TOKEN_TENSHI", "")
           branch = os.environ.get("GITHUB_REF_NAME") or "main"
 
           perception_workflow_path = ".github/workflows/perception_trigger.yml"
-          headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"token {token}",
-          }
 
-          def has_perception_run(status: str) -> bool:
-            if not repo or not token:
+          def has_perception_run(repo_full: str, token: str, status: str) -> bool:
+            if not repo_full or not token:
               return False
-            owner, name = repo.split("/", 1)
+            owner, name = repo_full.split("/", 1)
+            headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"token {token}",
+            }
             try:
               url = (
                 f"https://api.github.com/repos/{owner}/{name}"
@@ -70,7 +78,12 @@ jobs:
 
           deadline_s = time.time() + 300
           while time.time() < deadline_s:
-            if has_perception_run("in_progress") or has_perception_run("queued"):
+            if (
+              has_perception_run(calling_repo, token_calling, "in_progress")
+              or has_perception_run(calling_repo, token_calling, "queued")
+              or has_perception_run(tenshi_repo, token_tenshi, "in_progress")
+              or has_perception_run(tenshi_repo, token_tenshi, "queued")
+            ):
               time.sleep(10)
               continue
             break

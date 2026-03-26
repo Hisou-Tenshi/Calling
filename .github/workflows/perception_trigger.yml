@@ -10,6 +10,10 @@ concurrency:
   group: tenshi-bot
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   perception:
     runs-on: ubuntu-latest
@@ -17,7 +21,7 @@ jobs:
       image: ghcr.io/hisou-tenshi/tenshi:latest
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
     steps:
       - name: Checkout Tenshi repo
         uses: actions/checkout@v5
@@ -30,37 +34,44 @@ jobs:
       - name: "Guard: skip perception if webhook running"
         id: guard_webhook
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CALLING_REPO: ${{ github.repository }}
+          TENSHI_REPO: ${{ secrets.GH_REPO }}
+          GH_TOKEN_CALLING: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN_TENSHI: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
         run: |
           python - <<'PY'
           import json, os, sys, urllib.request
 
-          repo = os.environ.get("GITHUB_REPOSITORY", "")
           run_id = os.environ.get("GITHUB_RUN_ID", "")
           out_path = os.environ.get("GITHUB_OUTPUT", "")
-          token = os.environ.get("GH_TOKEN", "")
+          calling_repo = os.environ.get("CALLING_REPO", "")
+          tenshi_repo = os.environ.get("TENSHI_REPO", "")
+          token_calling = os.environ.get("GH_TOKEN_CALLING", "")
+          token_tenshi = os.environ.get("GH_TOKEN_TENSHI", "")
 
           # 保底：守卫条件拿不到时，倾向跳过（避免 webhook + perception 重复生成回复）
-          if not repo or not out_path or not token:
+          if not out_path or (not token_calling and not token_tenshi):
             with open(out_path, "a", encoding="utf-8") as f:
               f.write("should_skip=false\n")
             sys.exit(0)
 
-          owner, name = repo.split("/", 1)
           telegram_workflow_path = ".github/workflows/telegram_webhook.yml"
           branch = os.environ.get("GITHUB_REF_NAME") or "main"
 
-          headers = {
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"token {token}",
-          }
-
-          def has_telegram_run(status: str) -> bool:
+          def has_telegram_run(repo_full: str, token: str, status: str) -> bool:
             try:
+              if not repo_full or not token:
+                return False
+
+              owner, name = repo_full.split("/", 1)
               url = (
                 f"https://api.github.com/repos/{owner}/{name}"
                 f"/actions/runs?per_page=100&branch={branch}&status={status}"
               )
+              headers = {
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"token {token}",
+              }
               req = urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.load(resp)
@@ -78,7 +89,7 @@ jobs:
 
           should_skip = False
           for st in ("in_progress", "queued"):
-            if has_telegram_run(st):
+            if has_telegram_run(calling_repo, token_calling, st) or has_telegram_run(tenshi_repo, token_tenshi, st):
               should_skip = True
               break
 
