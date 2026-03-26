@@ -18,10 +18,10 @@ jobs:
   perception:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/hisou-tenshi/tenshi:latest
+      image: ghcr.io/${{ github.repository_owner }}/calling-tenshi:latest
       credentials:
         username: ${{ github.actor }}
-        password: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout Tenshi repo
         uses: actions/checkout@v5
