@@ -1,0 +1,205 @@
+name: Telegram Webhook (Calling)
+
+on:
+  repository_dispatch:
+    types: [tg_webhook]
+  workflow_dispatch:
+
+concurrency:
+  group: tenshi-bot
+  cancel-in-progress: false
+
+jobs:
+  handle_message:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/hisou-tenshi/tenshi:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Tenshi repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.GH_REPO }}
+          token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: tenshi
+
+      - name: "Guard: wait if perception is running"
+        env:
+          GH_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          TARGET_REPO: ${{ secrets.GH_REPO }}
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.request
+
+          repo = os.environ.get("TARGET_REPO", "")
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          token = os.environ.get("GH_TOKEN", "")
+          branch = os.environ.get("GITHUB_REF_NAME") or "main"
+
+          perception_workflow_path = ".github/workflows/perception_trigger.yml"
+          headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"token {token}",
+          }
+
+          def has_perception_run(status: str) -> bool:
+            if not repo or not token:
+              return False
+            owner, name = repo.split("/", 1)
+            try:
+              url = (
+                f"https://api.github.com/repos/{owner}/{name}"
+                f"/actions/runs?per_page=100&branch={branch}&status={status}"
+              )
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.load(resp)
+              for r in data.get("workflow_runs", []) or []:
+                rid = r.get("id")
+                if run_id and str(rid) == str(run_id):
+                  continue
+                path = (r.get("path") or "")
+                if path == perception_workflow_path or path.endswith("/perception_trigger.yml"):
+                  return True
+              return False
+            except Exception:
+              return False
+
+          deadline_s = time.time() + 300
+          while time.time() < deadline_s:
+            if has_perception_run("in_progress") or has_perception_run("queued"):
+              time.sleep(10)
+              continue
+            break
+          PY
+
+      - name: Process Message (run Tenshi/src)
+        id: process_message
+        continue-on-error: true
+        working-directory: tenshi
+        env:
+          PYTHONUNBUFFERED: "1"
+          TELEGRAM_TOKEN: ${{ secrets.TG_TOKEN }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          GITHUB_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          REPO_NAME: ${{ secrets.GH_REPO }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          TAVILY_KEY: ${{ secrets.TAVILY_KEY }}
+          MSG_TEXT: ${{ github.event.client_payload.text }}
+          MSG_CHAT_ID: ${{ github.event.client_payload.chat_id }}
+          MSG_USER_ID: ${{ github.event.client_payload.user_id }}
+          MSG_ID: ${{ github.event.client_payload.msg_id }}
+          MSG_FILE_ID: ${{ github.event.client_payload.file_id }}
+          MSG_FILE_TYPE: ${{ github.event.client_payload.file_type }}
+          MSG_FILE_NAME: ${{ github.event.client_payload.file_name }}
+          MSG_LOCATION: ${{ toJSON(github.event.client_payload.location) }}
+          MSG_DATE: ${{ github.event.client_payload.date }}
+          IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
+          CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
+        run: |
+          set +e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python -u src/telegram_tenshi_logger.py --debug --force_reply > /tmp/tenshi_runtime.log 2>&1
+          else
+            python -u src/telegram_tenshi_logger.py > /tmp/tenshi_runtime.log 2>&1
+          fi
+          code=$?
+          if [ $code -ne 0 ]; then
+            exit $code
+          fi
+
+      - name: Commit and Push Changes (to Tenshi repo)
+        if: always()
+        working-directory: tenshi
+        run: |
+          git config --global --add safe.directory "*"
+
+          git config --global user.name "比那名居 天子"
+          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+
+          git add Tenshi.json data/tenshi_log.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/ || true
+          git commit -m "天子已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
+
+          for attempt in 1 2 3; do
+            if git push >/dev/null 2>&1; then
+              exit 0
+            fi
+
+            git fetch origin main >/dev/null 2>&1
+
+            if ! git rebase origin/main >/dev/null 2>&1; then
+              if [ -n "$(git ls-files -u)" ]; then
+                git checkout --ours -- data/tenshi_log.json logs/debug.log logs/llm_trace.jsonl || true
+                git add data/tenshi_log.json logs/debug.log logs/llm_trace.jsonl || true
+                git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
+              else
+                git rebase --abort >/dev/null 2>&1 || true
+              fi
+            fi
+          done
+
+          git push >/dev/null 2>&1
+
+      - name: Build encrypted failure bundle
+        if: steps.process_message.outcome == 'failure' || failure()
+        id: build_failure_bundle
+        working-directory: tenshi
+        env:
+          MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
+        run: |
+          set -e
+          test -n "$MASTER_KEY_SOURCE"
+          bundle_name="tenshi_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
+          enc_name="${bundle_name}.enc"
+          tar -czf "/tmp/${bundle_name}" \
+            data/tenshi_log.json \
+            data/knowledge_base.json \
+            logs/debug.log \
+            logs/llm_trace.jsonl \
+            /tmp/tenshi_runtime.log 2>/dev/null || true
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in "/tmp/${bundle_name}" \
+            -out "${GITHUB_WORKSPACE}/${enc_name}" \
+            -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
+          rm -f "/tmp/${bundle_name}" "/tmp/tenshi_runtime.log"
+          echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Push encrypted failure bundle to Tenshi
+        if: (steps.process_message.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != ''
+        id: push_failure_bundle
+        working-directory: tenshi
+        run: |
+          set +e
+          enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
+          mkdir -p secure_failures
+          cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
+          git add "secure_failures/${enc_file}"
+          git commit -m "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1
+          if git push >/dev/null 2>&1; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload encrypted fallback artifact
+        if: (steps.process_message.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenshi-encrypted-failure-bundle
+          retention-days: 1
+          if-no-files-found: error
+          path: ${{ steps.build_failure_bundle.outputs.enc_file }}
+
+      - name: Cleanup transient runtime log
+        if: always()
+        run: rm -f /tmp/tenshi_runtime.log
