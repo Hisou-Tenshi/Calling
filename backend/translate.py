@@ -1263,188 +1263,134 @@ def _split_by_separators(text, seps, max_chars):
 
 # Regex patterns that strongly indicate a reference/bibliography section heading
 
+
 _REF_HEADING_RE = re.compile(
-
-    r"""(?ix)          # case-insensitive, verbose
-
-    ^\#{1,6}\s*        # Markdown heading marker
-
+    r"""(?ix)
+    ^\#{1,6}\s*
     (?:
-
-        references?    # References / Reference
-
-      | bibliography   # Bibliography
-
-      | bibliographie  # French
-
-      | literatur      # German
-
-      | 参考文献         # 参考文献
-
-      | 参考资料         # 参考资料
-
-      | 文献               # 文献
-
+        references?
+      | bibliography
+      | bibliographie
+      | literatur
+      | \u53c2\u8003\u6587\u732e
+      | \u53c2\u8003\u8d44\u6599
+      | \u6587\u732e
       | cited\s+works
-
       | works\s+cited
-
       | sources
-
       | notes
-
       | endnotes
-
       | footnotes
-
     )
-
     \s*$
-
     """,
-
     re.UNICODE,
-
 )
 
-
-
-# Regex for un-headed reference list items (numbered/bracketed citations)
-
-_REF_ITEM_RE = re.compile(
-
+# APA-style: Author, A. B. et al. Title. Journal vol, pages (year).
+_APA_LINE_RE = re.compile(
     r"""(?x)
-
-    ^\s*(?:
-
-        \[\d+\]        # [1] style
-
-      | \d+\.\s        # 1. style
-
-      | \(\d+\)        # (1) style
-
+    ^[A-Z\u4e00-\u9fff][\w\s,\.\-\u00c0-\u024f]{2,40}  # Author surname
+    (?:\s+et\s+al\.)?                                    # optional et al.
+    [,\.]\s+                                             # separator
+    .{5,}                                                # title / journal fragment
+    (?:
+        \(\d{4}\)                                         # (year)
+      | \d{4}[,;\.]                                       # year followed by punct
+      | doi:\S+                                           # DOI
+      | https?://\S+                                      # URL
     )
-
     """,
-
+    re.UNICODE,
 )
 
 
-
-LLM_REF_DETECT_PROMPT = (
-
-    "Does the following text start a References, Bibliography, or Works Cited section "
-
-    "of an academic/technical document? "
-
-    "Answer with exactly one word: YES or NO.\n\nText:\n{text}"
-
+# Vancouver/numbered: [1] Author... or 1. Author...
+_NUMBERED_REF_LINE_RE = re.compile(
+    r"""(?x)
+    ^\s*
+    (?:
+        \[\d{1,3}\]\s*     # [1] style - space after bracket is optional
+      | \d{1,3}\.\s        # 1. style
+      | \(\d{1,3}\)\s      # (1) style
+    )
+    \S                     # any non-space char follows (Author name etc.)
+    """,
+    re.UNICODE,
 )
-
-
 
 
 
 def _is_reference_heading_regex(chunk: str) -> bool:
-
     """Fast regex check: True if the chunk looks like a references section heading."""
-
     first_line = chunk.strip().split("\n")[0].strip()
-
     return bool(_REF_HEADING_RE.match(first_line))
 
 
-
-
-
-def _is_reference_section_llm(
-
-    chunk: str,
-
-    settings: Any,
-
-    model: str,
-
-) -> bool:
-
+def _is_reference_section_llm(chunk: str, settings, model: str) -> bool:
     """Ask the LLM whether this chunk is a reference section start."""
-
     prompt = LLM_REF_DETECT_PROMPT.format(text=chunk[:800])
-
     try:
-
         answer = translate_chunk(
-
             prompt, settings, model,
-
-            target_lang="English",   # not a real translation; just get YES/NO
-
+            target_lang="English",
             source_lang=None,
-
         ).strip().upper()
-
         result = answer.startswith("YES")
-
         logger.info("[ref_detect] LLM answered %r -> is_ref=%s", answer[:20], result)
-
         return result
-
     except Exception as e:
-
         logger.warning("[ref_detect] LLM call failed: %s", e)
-
         return False
 
 
-
+def _content_looks_like_references(chunk: str, min_matches: int = 2) -> bool:
+    """
+    Return True if enough lines of the chunk look like reference list items.
+    Checks APA, Vancouver/numbered, and bare DOI lines.
+    """
+    lines = [l.strip() for l in chunk.split("\n") if l.strip()]
+    if not lines:
+        return False
+    matches = sum(
+        1 for l in lines
+        if _APA_LINE_RE.match(l) or _NUMBERED_REF_LINE_RE.match(l)
+        or l.lower().startswith("doi:") or re.match(r"https?://", l)
+    )
+    # Require at least min_matches hits, or >40% of non-empty lines
+    return matches >= min_matches or (len(lines) >= 3 and matches / len(lines) >= 0.4)
 
 
 def detect_reference_section(
-
     chunk: str,
-
     settings: Any,
-
     model: str,
-
     *,
-
     use_llm: bool = True,
-
 ) -> bool:
-
     """
-
-    Return True if this chunk appears to start a References/Bibliography section.
-
-    Strategy:
-
-      1. Fast regex check (no API cost).
-
-      2. If the chunk starts with any heading and regex did not match, ask the LLM.
-
+    Return True if this chunk appears to start (or be part of) a
+    References/Bibliography section.  Detection cascade:
+      1. Heading regex match (zero cost).
+      2. Content pattern match: enough lines look like APA/Vancouver refs (zero cost).
+      3. If chunk starts with any heading and neither regex matched, ask the LLM.
     """
-
+    # 1. Heading regex
     if _is_reference_heading_regex(chunk):
-
         logger.info("[ref_detect] regex matched reference heading")
-
         return True
 
+    # 2. Content-based: lines match APA / numbered reference patterns
+    if _content_looks_like_references(chunk):
+        logger.info("[ref_detect] content pattern matched reference list")
+        return True
 
-
-    # Only call LLM when the chunk starts with a heading (to keep cost low)
-
+    # 3. LLM fallback: only for heading chunks that slipped through
     first_line = chunk.strip().split("\n")[0].strip()
-
     if use_llm and re.match(r"^#{1,6} ", first_line):
-
         return _is_reference_section_llm(chunk, settings, model)
 
-
-
     return False
-
 
 
 # 7. High-level orchestrator

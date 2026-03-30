@@ -37,6 +37,7 @@ def _escape(text: str) -> str:
     return text.translate(_LATEX_ESCAPE)
 
 
+
 def _inline(text: str) -> str:
     """
     Convert inline Markdown in a line to LaTeX.
@@ -46,6 +47,28 @@ def _inline(text: str) -> str:
     def _repl_code(m):
         return r"\texttt{" + m.group(1).replace("{{", "{").replace("}}", "}") + "}"
     text = re.sub(r"`([^`]+)`", _repl_code, text)
+
+    # Citation markers: ^[N]^ possibly followed by ^[,]^^[M]^ etc.
+    # First merge sequences like ^[N]^^[,]^^[M]^ -> ^[N,M]^
+    # Pattern: ^[X]^^[,]^^[Y]^ -> ^[X,Y]^
+    def _merge_citations(t):
+        # Repeatedly merge adjacent citation+comma patterns
+        prev = None
+        while prev != t:
+            prev = t
+            t = re.sub(r"\^\[([\d,\-]+)\]\^\^\[,\]\^\^\[([\d,\-]+)\]\^",
+                       r"^[\1,\2]^", t)
+            t = re.sub(r"\^\[([\d,\-]+)\]\^\^\[\.\]\^",
+                       r"^[\1]^", t)  # remove trailing ^[.]^
+        return t
+    text = _merge_citations(text)
+    # Convert remaining ^[N]^ to \textsuperscript{N}
+    text = re.sub(r"\^\[([\d,\-]+)\]\^",
+                  lambda m: r"\textsuperscript{" + m.group(1) + "}",
+                  text)
+    # Remove any leftover ^[.]^ or ^[,]^ punctuation markers
+    text = re.sub(r"\^\[[.,]\]\^", "", text)
+
 
     # Escape the rest (outside code spans)
     # We escape char by char, but code spans are already replaced
@@ -105,8 +128,11 @@ def md_to_latex(md: str, *, title: str = "", author: str = "") -> str:
             table_rows = []
             return
         ncols = max(len(r) for r in data_rows)
-        col_spec = "|".join(["l"] * ncols)
+        # Use equal-width p{} columns that fill linewidth
+        col_w = round(0.92 / ncols, 3)
+        col_spec = "|".join([f"p{{{col_w}\\linewidth}}" ] * ncols)
         out.append(r"\begin{center}")
+        out.append(r"{\small")  # smaller font to help fit content
         out.append(r"\begin{tabular}{|" + col_spec + r"|}")
         out.append(r"\hline")
         for ri, row in enumerate(data_rows):
@@ -116,9 +142,10 @@ def md_to_latex(md: str, *, title: str = "", author: str = "") -> str:
                 cells.append("")
             if ri == 0:
                 cells = [r"\textbf{" + c + "}" for c in cells]
-            out.append(" & ".join(cells) + r" \\")
+            out.append(" & ".join(cells) + r" \\[2pt]")
             out.append(r"\hline")
         out.append(r"\end{tabular}")
+        out.append(r"}")
         out.append(r"\end{center}")
         in_table = False
         table_rows = []
@@ -254,28 +281,30 @@ def md_to_latex(md: str, *, title: str = "", author: str = "") -> str:
     preamble_title = ""
     if title:
         preamble_title = (
-            r"\title{" + _escape(title) + "}\n"
-            r"\author{" + _escape(author) + "}\n"
-            r"\date{\today}\n"
-            r"\maketitle\n"
+            "\\title{" + _escape(title) + "}\n"
+            "\\author{" + _escape(author) + "}\n"
+            "\\date{\\today}\n"
+            "\\maketitle\n"
         )
 
     latex = (
-        r"\documentclass[12pt,a4paper]{article}" + "\n"
-        r"\usepackage[utf8]{inputenc}" + "\n"
-        r"\usepackage[T1]{fontenc}" + "\n"
-        r"\usepackage{lmodern}" + "\n"
-        r"\usepackage{amsmath,amssymb}" + "\n"
-        r"\usepackage{graphicx}" + "\n"
-        r"\usepackage{hyperref}" + "\n"
-        r"\usepackage{ulem}" + "\n"
-        r"\usepackage{booktabs}" + "\n"
-        r"\usepackage[margin=2.5cm]{geometry}" + "\n"
-        r"\usepackage{parskip}" + "\n"
-        r"\begin{document}" + "\n"
+        "\\documentclass[12pt,a4paper]{article}\n"
+        "\\usepackage{fontspec}\n"
+        "\\usepackage{xeCJK}\n"
+        "\\usepackage{amsmath,amssymb}\n"
+        "\\usepackage{graphicx}\n"
+        "\\usepackage[colorlinks=true,linkcolor=blue,urlcolor=blue]{hyperref}\n"
+        "\\usepackage{ulem}\n"
+        "\\usepackage{booktabs}\n"
+        "\\usepackage[margin=2.5cm]{geometry}\n"
+        "\\usepackage{parskip}\n"
+        "\\setCJKmainfont{SimSun}[AutoFakeBold=2,AutoFakeSlant=0.2]\n"
+        "\\setCJKsansfont{SimHei}\n"
+        "\\setCJKmonofont{FangSong}\n"
+        "\\begin{document}\n"
         + preamble_title
         + body + "\n"
-        + r"\end{document}" + "\n"
+        + "\\end{document}\n"
     )
     return latex
 
@@ -307,36 +336,95 @@ def compile_latex_to_pdf(latex: str) -> bytes:
         )
 
 
+
+
+
 def _compile_pdflatex(latex: str) -> bytes:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tex_path = Path(tmpdir) / "doc.tex"
+    """Compile LaTeX to PDF using xelatex (preferred for Unicode/CJK) or pdflatex."""
+    import uuid, shutil
+    # Use a temp dir without spaces
+    candidates = [
+        Path("C:/Temp"),
+        Path(os.environ.get("SystemDrive", "C:")) / "Temp",
+        Path(tempfile.gettempdir()),
+    ]
+    base_dir = None
+    for c in candidates:
+        try:
+            if " " not in str(c):
+                c.mkdir(parents=True, exist_ok=True)
+                base_dir = c
+                break
+        except Exception:
+            pass
+    if base_dir is None:
+        base_dir = Path(tempfile.gettempdir())
+
+    work_dir = base_dir / f"calling_tex_{uuid.uuid4().hex[:8]}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        tex_path = work_dir / "doc.tex"
         tex_path.write_text(latex, encoding="utf-8")
-        result = subprocess.run(
-            ["pdflatex", "-interaction=nonstopmode", "-output-directory", tmpdir, str(tex_path)],
-            capture_output=True,
-            timeout=60,
-        )
-        pdf_path = Path(tmpdir) / "doc.pdf"
-        if pdf_path.exists():
-            return pdf_path.read_bytes()
-        raise RuntimeError(
-            f"pdflatex exited {result.returncode}: "
-            + (result.stdout or b"").decode("utf-8", errors="ignore")[-800:]
-        )
+        tex_str = str(tex_path)
+        out_str = str(work_dir)
+
+        # Try xelatex first (full Unicode + CJK support), then pdflatex
+        for engine in ["xelatex", "pdflatex"]:
+            result = subprocess.run(
+                [engine, "-interaction=nonstopmode",
+                 "-output-directory", out_str, tex_str],
+                capture_output=True,
+                timeout=120,
+                cwd=out_str,
+            )
+            pdf_path = work_dir / "doc.pdf"
+            if pdf_path.exists():
+                logger.info("[md2latex] compiled with %s, PDF=%d bytes", engine, pdf_path.stat().st_size)
+                return pdf_path.read_bytes()
+            logger.warning("[md2latex] %s failed (exit=%d)", engine, result.returncode)
+
+        # All engines failed
+        stdout = (result.stdout or b"").decode("utf-8", errors="ignore")[-800:]
+        raise RuntimeError(f"xelatex/pdflatex exited {result.returncode}: {stdout}")
+    finally:
+        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 def _compile_reportlab(latex: str) -> bytes:
-    """Very basic fallback: render the LaTeX source as a plain-text PDF."""
-    from reportlab.pdfgen import canvas  # type: ignore
-    from reportlab.lib.pagesizes import A4  # type: ignore
-    from reportlab.lib.units import cm  # type: ignore
+    """Fallback: render plain-text PDF via reportlab with CJK font support."""
     import io
+    try:
+        from reportlab.pdfgen import canvas  # type: ignore
+        from reportlab.lib.pagesizes import A4  # type: ignore
+        from reportlab.lib.units import cm  # type: ignore
+        from reportlab.pdfbase import pdfmetrics  # type: ignore
+        from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
+    except ImportError:
+        raise ImportError("reportlab not available. Run: pip install reportlab")
 
-    # Strip LaTeX commands for a readable output
+    # Register a CJK-capable font if available
+    cjk_font = "Helvetica"  # fallback
+    cjk_candidates = [
+        (r"C:\Windows\Fonts\simsun.ttc", "SimSun"),
+        (r"C:\Windows\Fonts\simhei.ttf", "SimHei"),
+        (r"C:\Windows\Fonts\msyh.ttc",  "MSYaHei"),
+        ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", "NotoSansCJK"),
+        ("/System/Library/Fonts/PingFang.ttc", "PingFang"),
+    ]
+    for font_path, font_name in cjk_candidates:
+        try:
+            pdfmetrics.registerFont(TTFont(font_name, font_path, subfontIndex=0))
+            cjk_font = font_name
+            logger.info("[md2latex] reportlab using CJK font: %s", font_name)
+            break
+        except Exception:
+            pass
+
+    # Strip LaTeX commands for readable output
     text = re.sub(r"\\[a-zA-Z]+\*?\{([^}]*)\}", r"\1", latex)
     text = re.sub(r"\\[a-zA-Z]+\*?", "", text)
     text = re.sub(r"[{}]", "", text)
-    text = re.sub(r"\n{3}", "\n\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
@@ -344,21 +432,27 @@ def _compile_reportlab(latex: str) -> bytes:
     margin = 2.5 * cm
     x = margin
     y = height - margin
-    line_height = 14
-    c.setFont("Helvetica", 11)
+    line_height = 15
+    font_size = 10
+    c.setFont(cjk_font, font_size)
 
     for para in text.split("\n"):
-        for line in (para,) if len(para) < 90 else _wrap_text(para, 90):
+        for line in (para,) if len(para) < 80 else _wrap_text(para, 80):
             if y < margin:
                 c.showPage()
-                c.setFont("Helvetica", 11)
+                c.setFont(cjk_font, font_size)
                 y = height - margin
-            c.drawString(x, y, line)
+            try:
+                c.drawString(x, y, line)
+            except Exception:
+                try:
+                    c.drawString(x, y, line.encode("latin-1", errors="replace").decode("latin-1"))
+                except Exception:
+                    pass
             y -= line_height
 
     c.save()
     return buf.getvalue()
-
 
 def _wrap_text(text: str, width: int) -> list[str]:
     import textwrap
