@@ -1,9 +1,13 @@
+import json
+import logging
 import os
 import shutil
+import sys
 import uuid
+from collections import deque
 from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from backend.config import load_settings
 from backend.agent import make_tool_exec, route_and_chat
@@ -12,6 +16,48 @@ from backend.embeddings import make_gemini_embedding_fn
 from backend.rag_store import RagStore
 from backend.util import chunk_text, ensure_dir
 from backend.conversation_store import ConversationStore
+from backend.translate import translate_document, SEPARATOR_PRESETS
+
+
+class _BroadcastHandler(logging.Handler):
+    """Keeps a ring-buffer of recent log records and notifies SSE subscribers."""
+    def __init__(self, maxlen: int = 500):
+        super().__init__()
+        self._buf: deque[str] = deque(maxlen=maxlen)
+        self._queues: list[deque] = []
+        self.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            line = self.format(record)
+            self._buf.append(line)
+            for q in self._queues:
+                q.append(line)
+        except Exception:
+            pass
+
+    def subscribe(self) -> deque:
+        q: deque = deque()
+        # replay recent history
+        q.extend(self._buf)
+        self._queues.append(q)
+        return q
+
+    def unsubscribe(self, q: deque) -> None:
+        try:
+            self._queues.remove(q)
+        except ValueError:
+            pass
+
+
+_broadcast_handler = _BroadcastHandler(maxlen=500)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), _broadcast_handler],
+)
+logger = logging.getLogger("calling.main")
 
 try:
     from fastapi.staticfiles import StaticFiles
@@ -373,6 +419,321 @@ def create_app() -> FastAPI:
             return JSONResponse({"detail": e.detail}, status_code=e.status_code)
         except Exception as e:
             return JSONResponse({"detail": str(e)}, status_code=500)
+
+
+    @app.post("/api/convert/tex")
+    async def api_convert_tex(
+        payload: dict = None,
+    ):
+        """Convert Markdown text to LaTeX. Body: {md: str, title?: str, author?: str}"""
+        try:
+            from backend.md2latex import md_to_latex
+            if payload is None:
+                payload = {}
+            md = payload.get("md") or ""
+            title = payload.get("title") or ""
+            author = payload.get("author") or ""
+            if not md.strip():
+                return JSONResponse({"error": "md field is empty"}, status_code=400)
+            latex = md_to_latex(md, title=title, author=author)
+            logger.info("[api/convert/tex] converted %d chars MD -> %d chars LaTeX", len(md), len(latex))
+            return JSONResponse({"latex": latex})
+        except Exception as e:
+            logger.exception("[api/convert/tex] error: %s", e)
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    @app.post("/api/convert/pdf")
+    async def api_convert_pdf(
+        payload: dict = None,
+    ):
+        """Convert Markdown text to PDF. Body: {md: str, title?: str, author?: str}"""
+        try:
+            from backend.md2latex import md_to_latex, compile_latex_to_pdf
+            from fastapi.responses import Response
+            if payload is None:
+                payload = {}
+            md = payload.get("md") or ""
+            title = payload.get("title") or ""
+            author = payload.get("author") or ""
+            if not md.strip():
+                return JSONResponse({"error": "md field is empty"}, status_code=400)
+            latex = md_to_latex(md, title=title, author=author)
+            logger.info("[api/convert/pdf] compiling PDF for %d chars LaTeX", len(latex))
+            pdf_bytes = compile_latex_to_pdf(latex)
+            logger.info("[api/convert/pdf] PDF size=%d bytes", len(pdf_bytes))
+            return Response(
+                content=pdf_bytes,
+                media_type="application/pdf",
+                headers={"Content-Disposition": "attachment; filename=translated.pdf"},
+            )
+        except Exception as e:
+            logger.exception("[api/convert/pdf] error: %s", e)
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    @app.get("/api/logs")
+    async def api_logs(request: Request):
+        """SSE stream of server log lines. Replays last 500 lines on connect."""
+        import asyncio
+
+        q = _broadcast_handler.subscribe()
+
+        async def event_stream():
+            try:
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    if q:
+                        line = q.popleft()
+                        level = "INFO"
+                        for lvl in ("ERROR", "WARNING", "DEBUG", "CRITICAL"):
+                            if f"[{lvl}]" in line:
+                                level = lvl
+                                break
+                        payload = json.dumps({"line": line, "level": level}, ensure_ascii=False)
+                        yield f"data: {payload}\n\n"
+                    else:
+                        await asyncio.sleep(0.15)
+            finally:
+                _broadcast_handler.unsubscribe(q)
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/api/server/shutdown")
+    def api_server_shutdown():
+        """Gracefully shut down the uvicorn server process."""
+        import threading
+        logger.info("[api/server/shutdown] shutdown requested via UI")
+        def _do_shutdown():
+            import time, os, signal
+            time.sleep(0.5)
+            os.kill(os.getpid(), signal.SIGTERM)
+        threading.Thread(target=_do_shutdown, daemon=True).start()
+        return JSONResponse({"shutdown": True, "message": "Server is shutting down."})
+
+    @app.get("/api/translate/languages")
+    def api_translate_languages():
+        languages = [
+            "Chinese (Simplified)", "Chinese (Traditional)", "English", "Japanese",
+            "Korean", "French", "German", "Spanish", "Portuguese", "Italian",
+            "Russian", "Arabic", "Hindi", "Dutch", "Polish", "Turkish",
+            "Vietnamese", "Thai", "Indonesian", "Swedish", "Norwegian",
+            "Danish", "Finnish", "Czech", "Romanian", "Hungarian",
+        ]
+        return {"languages": languages, "separator_presets": list(SEPARATOR_PRESETS.keys()) + ["custom"]}
+
+    @app.post("/api/translate")
+    async def api_translate(
+        file: UploadFile = File(...),
+        model: str = Form(""),
+        target_lang: str = Form("English"),
+        source_lang: str = Form(""),
+        split_mode: str = Form("separator"),
+        separator_preset: str = Form("paragraph"),
+        custom_separators: str = Form(""),
+        parent_max_chars: int = Form(3000),
+        child_max_chars: int = Form(800),
+        llm_split_model: str = Form(""),
+    ):
+        try:
+            _model = (model or "").strip() or settings.default_chat_model
+            _target = (target_lang or "").strip() or "English"
+            _source = (source_lang or "").strip() or None
+            _split_mode = (split_mode or "separator").strip()
+            _sep_preset = (separator_preset or "paragraph").strip()
+            _custom_seps = [s for s in (custom_separators or "").split("|") if s]
+            _llm_split_model = (llm_split_model or "").strip() or None
+            _parent_max = max(500, min(int(parent_max_chars), 12000))
+            _child_max = max(200, min(int(child_max_chars), 6000))
+
+            raw = await file.read()
+            filename = os.path.basename(file.filename or "upload.txt")
+            logger.info("[api/translate] file=%s model=%s target=%s", filename, _model, _target)
+
+            result = translate_document(
+                raw=raw,
+                filename=filename,
+                settings=settings,
+                model=_model,
+                target_lang=_target,
+                source_lang=_source,
+                split_mode=_split_mode,
+                separator_preset=_sep_preset,
+                custom_separators=_custom_seps if _custom_seps else None,
+                parent_max_chars=_parent_max,
+                child_max_chars=_child_max,
+                llm_split_model=_llm_split_model,
+            )
+
+            return JSONResponse(result)
+        except Exception as e:
+            logger.exception("[api/translate] error: %s", e)
+            return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Active translation jobs: job_id -> {"abort": bool}
+    _translate_jobs: dict[str, dict] = {}
+
+    @app.post("/api/translate/stream")
+    async def api_translate_stream(
+        file: UploadFile = File(...),
+        model: str = Form(""),
+        target_lang: str = Form("English"),
+        source_lang: str = Form(""),
+        split_mode: str = Form("separator"),
+        separator_preset: str = Form("paragraph"),
+        custom_separators: str = Form(""),
+        parent_max_chars: int = Form(2000),
+        child_max_chars: int = Form(2000),
+        llm_split_model: str = Form(""),
+        job_id: str = Form(""),
+    ):
+        _model = (model or "").strip() or settings.default_chat_model
+        _target = (target_lang or "").strip() or "English"
+        _source = (source_lang or "").strip() or None
+        _split_mode = (split_mode or "separator").strip()
+        _sep_preset = (separator_preset or "paragraph").strip()
+        _custom_seps = [s for s in (custom_separators or "").split("|") if s]
+        _llm_split_model = (llm_split_model or "").strip() or None
+        _chunk_max = max(500, min(max(int(parent_max_chars), int(child_max_chars)), 12000))
+        _job_id = (job_id or "").strip() or uuid.uuid4().hex[:12]
+
+        raw = await file.read()
+        filename = os.path.basename(file.filename or "upload.txt")
+        logger.info("[stream] job=%s file=%s model=%s target=%s chunk_max=%d",
+                    _job_id, filename, _model, _target, _chunk_max)
+
+        job_state = {"abort": False}
+        _translate_jobs[_job_id] = job_state
+
+        def _sse(event: str, data: Any) -> str:
+            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+        def run_translation():
+            from backend.translate import (
+                file_to_markdown, _split_markdown, llm_split_text,
+                translate_chunk, verify_chunks,
+                SEPARATOR_PRESETS, DEFAULT_CHUNK_MAX_CHARS,
+            )
+
+            yield _sse("start", {"job_id": _job_id, "filename": filename})
+
+            # Step 1: Convert to Markdown
+            try:
+                md_text = file_to_markdown(raw, filename)
+            except Exception as e:
+                logger.error("[stream] extract error: %s", e)
+                yield _sse("error", {"message": f"Extraction failed: {e}"})
+                return
+
+            if not md_text.strip():
+                yield _sse("error", {"message": "Could not extract text from file."})
+                return
+
+            yield _sse("progress", {"stage": "extracted", "chars": len(md_text)})
+            logger.info("[stream] job=%s extracted %d chars", _job_id, len(md_text))
+
+            # Step 2: Split
+            try:
+                if _split_mode == "llm":
+                    split_model = _llm_split_model or _model
+                    def _call_llm(prompt):
+                        return translate_chunk(prompt, settings, split_model,
+                                              target_lang="English", source_lang=None)
+                    chunks, integrity = llm_split_text(
+                        md_text, call_llm=_call_llm, max_chars=_chunk_max)
+                else:
+                    chunks = _split_markdown(md_text, _chunk_max)
+                    integrity = verify_chunks(md_text, chunks)
+            except Exception as e:
+                logger.error("[stream] split error: %s", e)
+                yield _sse("error", {"message": f"Splitting failed: {e}"})
+                return
+
+            total = len(chunks)
+            yield _sse("progress", {
+                "stage": "split", "total": total,
+                "integrity": integrity,
+                "integrity_ok": integrity.get("ok", True),
+            })
+            logger.info("[stream] job=%s split=%d integrity=%s", _job_id, total, integrity)
+
+            if not integrity.get("ok", True):
+                logger.warning("[stream] job=%s low coverage=%.2f",
+                               _job_id, integrity.get("coverage", 0))
+
+            # Step 3: Translate each chunk (skip reference section onwards)
+            from backend.translate import detect_reference_section
+            translated_parts = []
+            in_references = False
+            for i, chunk in enumerate(chunks):
+                if job_state.get("abort"):
+                    logger.info("[stream] job=%s aborted at chunk %d/%d", _job_id, i+1, total)
+                    yield _sse("aborted", {"done": i, "total": total})
+                    return
+
+                # Detect reference section
+                if not in_references:
+                    if detect_reference_section(chunk, settings, _model):
+                        in_references = True
+                        logger.info("[stream] job=%s ref section at chunk %d/%d", _job_id, i+1, total)
+
+                is_ref = in_references
+                yield _sse("chunk_start", {
+                    "index": i, "total": total,
+                    "chars": len(chunk),
+                    "sub_count": 1,
+                    "preview": chunk[:60],
+                    "skipped": is_ref,
+                })
+                logger.info("[stream] job=%s chunk %d/%d chars=%d skipped=%s",
+                            _job_id, i+1, total, len(chunk), is_ref)
+
+                if is_ref:
+                    t = chunk  # pass through verbatim
+                else:
+                    try:
+                        t = translate_chunk(chunk, settings, _model,
+                                           target_lang=_target, source_lang=_source)
+                    except Exception as e:
+                        logger.error("[stream] job=%s chunk %d error: %s", _job_id, i+1, e)
+                        yield _sse("error", {"message": f"Chunk {i+1}/{total} failed: {e}"})
+                        return
+
+                translated_parts.append(t)
+                yield _sse("chunk_done", {
+                    "index": i, "total": total,
+                    "text": t,
+                    "percent": round((i + 1) / total * 100),
+                    "skipped": is_ref,
+                })
+
+            result_text = "\n\n".join(translated_parts)
+            logger.info("[stream] job=%s complete output=%d chars", _job_id, len(result_text))
+            yield _sse("done", {
+                "translated_text": result_text,
+                "chunks_total": total,
+                "filename": filename,
+                "integrity": integrity,
+            })
+            _translate_jobs.pop(_job_id, None)
+
+        return StreamingResponse(
+            run_translation(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    @app.post("/api/translate/abort/{job_id}")
+    def api_translate_abort(job_id: str):
+        job = _translate_jobs.get(job_id)
+        if job is None:
+            return JSONResponse({"aborted": False, "reason": "job not found"}, status_code=404)
+        job["abort"] = True
+        logger.info("[api/translate/abort] job=%s abort requested", job_id)
+        return JSONResponse({"aborted": True, "job_id": job_id})
 
     return app
 

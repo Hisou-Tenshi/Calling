@@ -16,85 +16,225 @@
             <div class="subtitle">Local LLM chat with tools + optional RAG</div>
           </div>
         </div>
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
+          <button class="tab" data-tab="translate" role="tab" aria-selected="false">Translate</button>
+        </nav>
       </header>
 
-      <main class="grid">
-        <aside class="panel conv-panel">
-          <div class="panel-header">
-            <div>
-              <div class="panel-title">Conversations</div>
-              <div class="panel-subtitle">History + new chat</div>
+      <!-- Chat tab -->
+      <div id="tab-chat" class="tab-panel active">
+        <main class="grid">
+          <aside class="panel conv-panel">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title">Conversations</div>
+                <div class="panel-subtitle">History + new chat</div>
+              </div>
             </div>
-          </div>
-          <div class="conv-body">
-            <button type="button" id="newConvBtn" class="btn primary">New chat</button>
-            <div id="convList" class="conv-list" aria-label="Conversation list"></div>
-          </div>
-        </aside>
-
-        <section class="panel chat-panel">
-          <div class="panel-header">
-            <div>
-              <div class="panel-title">Chat</div>
-              <div class="panel-subtitle">20 turns context window enforced server-side</div>
+            <div class="conv-body">
+              <button type="button" id="newConvBtn" class="btn primary">New chat</button>
+              <div id="convList" class="conv-list" aria-label="Conversation list"></div>
             </div>
-          </div>
+          </aside>
 
-          <div id="messages" class="messages" aria-live="polite"></div>
-
-          <form id="chatForm" class="composer" autocomplete="off">
-            <textarea
-              id="prompt"
-              rows="3"
-              placeholder="Type your message..."
-              spellcheck="false"
-            ></textarea>
-            <div class="composer-actions">
-              <button type="submit" id="sendBtn" class="btn primary">Send</button>
-              <button type="button" id="clearBtn" class="btn">Clear</button>
+          <section class="panel chat-panel">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title">Chat</div>
+                <div class="panel-subtitle">20 turns context window enforced server-side</div>
+              </div>
             </div>
-          </form>
-          <div id="status" class="status"></div>
-        </section>
 
-        <aside class="panel side-panel">
-          <div class="panel-header">
-            <div class="panel-title">Controls</div>
-            <div class="panel-subtitle">Toggle tools & RAG</div>
-          </div>
+            <div id="messages" class="messages" aria-live="polite"></div>
 
-          <div class="field">
-            <label for="modelSelect"><b>Model</b></label>
-            <select id="modelSelect" class="input"></select>
-            <input id="modelCustom" class="input" placeholder="Or type a custom model id" />
-          </div>
+            <form id="chatForm" class="composer" autocomplete="off">
+              <textarea
+                id="prompt"
+                rows="3"
+                placeholder="Type your message..."
+                spellcheck="false"
+              ></textarea>
+              <div class="composer-actions">
+                <button type="submit" id="sendBtn" class="btn primary">Send</button>
+                <button type="button" id="clearBtn" class="btn">Clear</button>
+              </div>
+            </form>
+            <div id="status" class="status"></div>
+          </section>
 
-          <div class="field toggles">
-            <label class="check">
-              <input type="checkbox" id="ragToggle" checked />
-              <span><b>RAG (upload embeddings + per-chat retrieval)</b></span>
-            </label>
-            <label class="check">
-              <input type="checkbox" id="forceSearchToggle" />
-              <span><b>Force web_search before answer</b></span>
-            </label>
-          </div>
+          <aside class="panel side-panel">
+            <div class="panel-header">
+              <div class="panel-title">Controls</div>
+              <div class="panel-subtitle">Toggle tools &amp; RAG</div>
+            </div>
 
-          <div class="field">
-            <label><b>Uploads</b></label>
-            <input type="file" id="fileInput" multiple />
-            <button type="button" id="uploadBtn" class="btn">Upload</button>
-            <div id="uploadList" class="upload-list"></div>
-          </div>
+            <div class="field">
+              <label for="modelSelect"><b>Model</b></label>
+              <select id="modelSelect" class="input"></select>
+              <input id="modelCustom" class="input" placeholder="Or type a custom model id" />
+            </div>
 
-          <div class="hint">
-            Tool calling is automatic: the model decides when to call <code>web_search</code> or <code>read_file</code>.
-          </div>
-        </aside>
-      </main>
+            <div class="field toggles">
+              <label class="check">
+                <input type="checkbox" id="ragToggle" checked />
+                <span><b>RAG (upload embeddings + per-chat retrieval)</b></span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="forceSearchToggle" />
+                <span><b>Force web_search before answer</b></span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label><b>Uploads</b></label>
+              <input type="file" id="fileInput" multiple />
+              <button type="button" id="uploadBtn" class="btn">Upload</button>
+              <div id="uploadList" class="upload-list"></div>
+            </div>
+
+            <div class="hint">
+              Tool calling is automatic: the model decides when to call <code>web_search</code> or <code>read_file</code>.
+            </div>
+          </aside>
+        </main>
+      </div>
+
+      <!-- Translate tab -->
+      <div id="tab-translate" class="tab-panel">
+        <main class="grid translate-grid">
+
+          <!-- Left: file + options -->
+          <aside class="panel tr-options-panel">
+            <div class="panel-header">
+              <div class="panel-title">Document Translation</div>
+              <div class="panel-subtitle">txt · rtf · doc · docx · pdf · md · rmd</div>
+            </div>
+            <div class="tr-options-body">
+
+              <div class="field">
+                <label><b>File</b></label>
+                <input type="file" id="trFileInput"
+                  accept=".txt,.md,.rmd,.markdown,.rtf,.doc,.docx,.pdf" />
+              </div>
+
+              <div class="field">
+                <label for="trModelSelect"><b>Translation model</b></label>
+                <select id="trModelSelect" class="input"></select>
+                <input id="trModelCustom" class="input" placeholder="Or type a custom model id" />
+              </div>
+
+              <div class="field">
+                <label for="trTargetLang"><b>Target language</b></label>
+                <select id="trTargetLang" class="input"></select>
+              </div>
+
+              <div class="field">
+                <label for="trSourceLang"><b>Source language</b> <span class="muted">(auto-detect if blank)</span></label>
+                <select id="trSourceLang" class="input">
+                  <option value="">Auto-detect</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label><b>Chunk split mode</b></label>
+                <div class="toggles">
+                  <label class="check">
+                    <input type="radio" name="trSplitMode" value="separator" checked />
+                    <span>Separator-based</span>
+                  </label>
+                  <label class="check">
+                    <input type="radio" name="trSplitMode" value="llm" />
+                    <span>LLM-assisted split</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="trSeparatorOptions">
+                <div class="field">
+                  <label for="trSepPreset"><b>Separator preset</b></label>
+                  <select id="trSepPreset" class="input">
+                    <option value="paragraph">Paragraph (\n\n)</option>
+                    <option value="sentence">Sentence</option>
+                    <option value="heading">Heading</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div class="field" id="trCustomSepField" style="display:none">
+                  <label for="trCustomSep"><b>Custom separators</b> <span class="muted">(pipe-separated, e.g. \n\n|---)</span></label>
+                  <input id="trCustomSep" class="input" placeholder="e.g. \n\n|---" />
+                </div>
+              </div>
+
+              <div id="trLlmSplitOptions" style="display:none">
+                <div class="field">
+                  <label for="trLlmSplitModel"><b>Split model</b> <span class="muted">(lightweight; blank = same as translation model)</span></label>
+                  <input id="trLlmSplitModel" class="input" placeholder="e.g. gemini-2.5-flash" />
+                </div>
+              </div>
+
+              <div class="field tr-chunk-sizes">
+                <label><b>Chunk sizes (chars)</b></label>
+                <div class="chunk-row">
+                  <div>
+                    <span class="muted">Parent max</span>
+                    <input id="trParentMax" type="number" class="input input-sm" value="3000" min="500" max="12000" />
+                  </div>
+                  <div>
+                    <span class="muted">Child max</span>
+                    <input id="trChildMax" type="number" class="input input-sm" value="800" min="200" max="6000" />
+                  </div>
+                </div>
+              </div>
+
+              <button type="button" id="trStartBtn" class="btn primary tr-start-btn">Translate</button>
+              <button type="button" id="trAbortBtn" class="btn danger tr-abort-btn" style="display:none">Stop</button>
+              <div id="trProgressWrap" class="tr-progress-wrap" style="display:none">
+                <div class="tr-progress-track"><div id="trProgressBar" class="tr-progress-bar" style="width:0%"></div></div>
+                <div id="trProgressLabel" class="tr-progress-label"></div>
+              </div>
+              <div id="trStatus" class="status"></div>
+            </div>
+          </aside>
+
+          <!-- Right: output -->
+          <section class="panel tr-output-panel">
+            <div class="panel-header">
+              <div class="panel-title">Output</div>
+              <div class="panel-subtitle">Translated document (Markdown)</div>
+            </div>
+            <div class="tr-output-toolbar">
+              <button type="button" id="trCopyBtn" class="btn" disabled>Copy</button>
+              <button type="button" id="trDownloadBtn" class="btn" disabled>Download .md</button>
+              <button type="button" id="trDownloadTexBtn" class="btn" disabled>Download .tex</button>
+              <button type="button" id="trDownloadPdfBtn" class="btn" disabled>Download .pdf</button>
+              <span id="trChunkInfo" class="muted tr-chunk-info"></span>
+            </div>
+            <div id="trOutput" class="tr-output" aria-live="polite"></div>
+          </section>
+
+        </main>
+      </div>
+
     </div>
 
+
+    <!-- Floating log panel -->
+    <div id="logPanel" class="log-panel" style="display:none">
+      <div class="log-panel-header">
+        <span class="log-panel-title">Server Logs</span>
+        <div class="log-panel-actions">
+          <button type="button" id="logClearBtn" class="log-btn">Clear</button>
+          <button type="button" id="logCloseBtn" class="log-btn">✕</button>
+        </div>
+      </div>
+      <div id="logBody" class="log-body"></div>
+    </div>
+    <!-- Log toggle + server controls (fixed bottom-right) -->
+    <div class="log-fab-group">
+      <button type="button" id="serverShutdownBtn" class="log-fab danger" title="Stop server">⏹</button>
+      <button type="button" id="logToggleBtn" class="log-fab" title="Toggle logs">📋</button>
+    </div>
     <script src="/static/app.js"></script>
   </body>
 </html>
-

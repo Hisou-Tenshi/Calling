@@ -8,3 +8,7 @@ numpy
 google-genai
 anthropic
 requests
+# Translation extras
+python-docx
+pdfminer.six
+striprtf
