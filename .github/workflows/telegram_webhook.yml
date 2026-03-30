@@ -17,7 +17,7 @@ jobs:
   handle_message:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/${{ github.repository_owner }}/calling-tenshi:latest
+      image: ghcr.io/hisou-tenshi/calling-tenshi:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
