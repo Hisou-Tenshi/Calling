@@ -121,12 +121,28 @@ jobs:
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
         run: |
           set +e
+          # 检查必要的环境变量是否存在
+          if [ -z "${{ secrets.ELAINA_TG_TOKEN }}" ]; then
+            echo "Error: ELAINA_TG_TOKEN secret is missing in this repository."
+            exit 1
+          fi
+          if [ -z "${{ secrets.ADMIN_ID }}" ]; then
+            echo "Error: ADMIN_ID secret is missing in this repository."
+            exit 1
+          fi
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             python -u src/telegram_tenshi_logger.py --debug --force_reply > /tmp/elaina_runtime.log 2>&1
           else
             python -u src/telegram_tenshi_logger.py > /tmp/elaina_runtime.log 2>&1
           fi
           code=$?
+          
+          # 无论成功失败，都尝试打印最后 100 行日志，方便在 Action 界面直接排查
+          echo "--- Last 100 lines of runtime log ---"
+          tail -n 100 /tmp/elaina_runtime.log
+          echo "--- End of runtime log ---"
+
           if [ $code -ne 0 ]; then
             exit $code
           fi
@@ -140,7 +156,13 @@ jobs:
           git config --global user.name "伊蕾娜"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          git add Elaina.json data/tenshi_log.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/ || true
+          # 鲁棒地添加文件：逐个检查是否存在，避免其中一个不存在导致整行失败
+          for f in Elaina.json data/tenshi_log.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/; do
+            if [ -e "$f" ]; then
+              git add "$f"
+            fi
+          done
+
           git commit -m "伊蕾娜已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do

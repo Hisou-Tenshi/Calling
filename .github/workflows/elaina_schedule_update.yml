@@ -74,7 +74,12 @@ jobs:
 
           rm -rf downloads/* || true
 
-          git add data/ logs/ downloads/ >/dev/null 2>&1 || true
+          # 鲁棒地添加文件：逐个检查是否存在
+          for f in Elaina.json data/ logs/ downloads/; do
+            if [ -e "$f" ]; then
+              git add "$f"
+            fi
+          done
 
           if git commit -m "伊蕾娜例行巡狩：记忆更新与卷宗整理 [skip ci]" >/dev/null 2>&1; then
             for attempt in 1 2 3; do
