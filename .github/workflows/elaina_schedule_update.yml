@@ -1,0 +1,191 @@
+name: Elaina Scheduled Update (Calling)
+
+on:
+  schedule:
+    - cron: '22 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: elaina-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  daily_update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/hisou-tenshi/calling-tenshi:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Elaina repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
+          token: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: elaina
+
+      - name: Get Date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Run Log Update
+        id: update_script
+        working-directory: elaina
+        env:
+          REPO_NAME: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+        run: |
+          python src/log_update.py > /tmp/elaina_runtime.log 2>&1
+
+      - name: Commit and Push Changes (to Elaina repo)
+        if: always()
+        working-directory: elaina
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "伊蕾娜"
+          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+
+          mkdir -p data logs downloads
+
+          DATE="${{ steps.date.outputs.date }}"
+          mkdir -p "logs/archive/${DATE}"
+
+          find logs -maxdepth 1 -type f -exec cp -f {} "logs/archive/${DATE}/" \; || true
+
+          find logs/archive -mindepth 1 -maxdepth 1 -type d -name '????-??-??' | sort | head -n -3 | xargs -r rm -rf
+
+          find logs -mindepth 1 -maxdepth 1 ! -name 'archive' -exec rm -rf -- {} + || true
+          mkdir -p downloads logs
+          touch downloads/.gitkeep
+          touch logs/.gitkeep
+
+          rm -rf downloads/* || true
+
+          git add data/ logs/ downloads/ >/dev/null 2>&1 || true
+
+          if git commit -m "伊蕾娜例行巡狩：记忆更新与卷宗整理 [skip ci]" >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              if git push origin main >/dev/null 2>&1; then
+                exit 0
+              fi
+
+              git fetch origin main >/dev/null 2>&1
+
+              if ! git rebase origin/main >/dev/null 2>&1; then
+                if [ -n "$(git ls-files -u)" ]; then
+                  git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
+                    if [ -e "$cf" ]; then
+                      git checkout --ours -- "$cf" >/dev/null 2>&1 || true
+                      git add -- "$cf" >/dev/null 2>&1 || true
+                    fi
+                  done
+                  git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
+                else
+                  git rebase --abort >/dev/null 2>&1 || true
+                fi
+              fi
+            done
+
+            git push origin main >/dev/null 2>&1
+          else
+            echo "No changes to commit, skipping push."
+          fi
+
+      - name: Build Release Package
+        if: steps.update_script.outcome == 'success'
+        working-directory: elaina
+        run: |
+          mkdir -p release_bundle/downloads
+
+          if [ -d "downloads" ]; then
+            cp -a downloads/. release_bundle/downloads/ || true
+          fi
+          if [ -f "data/knowledge_base.json" ]; then
+            cp -f "data/knowledge_base.json" release_bundle/
+          fi
+          if [ -f "data/tenshi_log.json" ]; then
+            cp -f "data/tenshi_log.json" release_bundle/
+          fi
+
+          zip -r release_payload.zip release_bundle >/dev/null 2>&1
+
+      - name: Create Daily Backup Release
+        if: steps.update_script.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: backup-${{ steps.date.outputs.date }}
+          name: Daily Backup ${{ steps.date.outputs.date }}
+          files: |
+            elaina/release_payload.zip
+          draft: false
+          prerelease: false
+          repository: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
+
+      - name: Build encrypted failure bundle
+        if: steps.update_script.outcome == 'failure' || failure()
+        id: build_failure_bundle
+        working-directory: elaina
+        env:
+          MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
+        run: |
+          set -e
+          test -n "$MASTER_KEY_SOURCE"
+          bundle_name="elaina_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
+          enc_name="${bundle_name}.enc"
+          tar -czf "/tmp/${bundle_name}" \
+            data/tenshi_log.json \
+            data/knowledge_base.json \
+            logs/debug.log \
+            logs/llm_trace.jsonl \
+            /tmp/elaina_runtime.log 2>/dev/null || true
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in "/tmp/${bundle_name}" \
+            -out "${GITHUB_WORKSPACE}/${enc_name}" \
+            -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
+          rm -f "/tmp/${bundle_name}" "/tmp/elaina_runtime.log"
+          echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Push encrypted failure bundle to Elaina
+        if: (steps.update_script.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != ''
+        id: push_failure_bundle
+        working-directory: elaina
+        run: |
+          set +e
+          enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
+          mkdir -p secure_failures
+          cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
+          git add "secure_failures/${enc_file}" >/dev/null 2>&1 || true
+          git commit -m "伊蕾娜应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1 || true
+          if git push origin main >/dev/null 2>&1; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload encrypted fallback artifact
+        if: (steps.update_script.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: elaina-encrypted-schedule-failure-${{ steps.date.outputs.date }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ steps.build_failure_bundle.outputs.enc_file }}
+
+      - name: Cleanup transient runtime log
+        if: always()
+        run: rm -f /tmp/elaina_runtime.log

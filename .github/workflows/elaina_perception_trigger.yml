@@ -1,0 +1,212 @@
+name: Elaina Perception Trigger (Calling)
+
+on:
+  repository_dispatch:
+    types: [elaina_perception_trigger]
+  workflow_dispatch:
+
+concurrency:
+  group: elaina-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  perception:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/hisou-tenshi/calling-tenshi:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Elaina repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
+          token: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: elaina
+
+      - name: "Guard: skip perception if webhook running"
+        id: guard_webhook
+        env:
+          CALLING_REPO: ${{ github.repository }}
+          ELAINA_REPO: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
+          GH_TOKEN_CALLING: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN_ELAINA: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, sys, urllib.request
+
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          out_path = os.environ.get("GITHUB_OUTPUT", "")
+          calling_repo = os.environ.get("CALLING_REPO", "")
+          elaina_repo = os.environ.get("ELAINA_REPO", "")
+          token_calling = os.environ.get("GH_TOKEN_CALLING", "")
+          token_elaina = os.environ.get("GH_TOKEN_ELAINA", "")
+
+          if not out_path or (not token_calling and not token_elaina):
+            with open(out_path, "a", encoding="utf-8") as f:
+              f.write("should_skip=false\n")
+            sys.exit(0)
+
+          telegram_workflow_path = ".github/workflows/elaina_telegram_webhook.yml"
+          branch = os.environ.get("GITHUB_REF_NAME") or "main"
+
+          def has_telegram_run(repo_full: str, token: str, status: str) -> bool:
+            try:
+              if not repo_full or not token:
+                return False
+
+              owner, name = repo_full.split("/", 1)
+              url = (
+                f"https://api.github.com/repos/{owner}/{name}"
+                f"/actions/runs?per_page=100&branch={branch}&status={status}"
+              )
+              headers = {
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"token {token}",
+              }
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.load(resp)
+              for r in data.get("workflow_runs", []) or []:
+                rid = r.get("id")
+                if run_id and str(rid) == str(run_id):
+                  continue
+                path = (r.get("path") or "")
+                if path == telegram_workflow_path or path.endswith("/elaina_telegram_webhook.yml") or path.endswith("/telegram_webhook.yml"):
+                  return True
+              return False
+            except Exception:
+              return True
+
+          should_skip = False
+          for st in ("in_progress", "queued"):
+            if has_telegram_run(calling_repo, token_calling, st) or has_telegram_run(elaina_repo, token_elaina, st):
+              should_skip = True
+              break
+
+          with open(out_path, "a", encoding="utf-8") as f:
+            f.write(f"should_skip={'true' if should_skip else 'false'}\n")
+          PY
+
+      - name: Run Perception Layer
+        id: run_perception
+        continue-on-error: true
+        if: steps.guard_webhook.outputs.should_skip != 'true'
+        working-directory: elaina
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.ELAINA_TG_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+        run: |
+          set +e
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python src/perception_layer.py --force > /tmp/elaina_runtime.log 2>&1
+          else
+            python src/perception_layer.py > /tmp/elaina_runtime.log 2>&1
+          fi
+          code=$?
+          if [ $code -ne 0 ]; then
+            exit $code
+          fi
+
+      - name: Commit and Push Changes (to Elaina repo)
+        if: steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'success'
+        working-directory: elaina
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "伊蕾娜"
+          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+
+          git add Elaina.json data/tenshi_log.json logs/ >/dev/null 2>&1 || true
+          git commit -m "伊蕾娜感知层：世界观测日志 [skip ci]" >/dev/null 2>&1 || true
+
+          for attempt in 1 2 3; do
+            if git push origin main >/dev/null 2>&1; then
+              exit 0
+            fi
+
+            git fetch origin main >/dev/null 2>&1
+            if ! git rebase origin/main >/dev/null 2>&1; then
+              if [ -n "$(git ls-files -u)" ]; then
+                git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
+                  if [ -e "$cf" ]; then
+                    git checkout --ours -- "$cf" >/dev/null 2>&1 || true
+                    git add -- "$cf" >/dev/null 2>&1 || true
+                  fi
+                done
+                git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
+              else
+                git rebase --abort >/dev/null 2>&1 || true
+              fi
+            fi
+          done
+
+          git push origin main >/dev/null 2>&1
+
+      - name: Build encrypted failure bundle
+        if: steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'failure'
+        id: build_failure_bundle
+        working-directory: elaina
+        env:
+          MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
+        run: |
+          set -e
+          test -n "$MASTER_KEY_SOURCE"
+          bundle_name="elaina_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
+          enc_name="${bundle_name}.enc"
+          tar -czf "/tmp/${bundle_name}" \
+            data/tenshi_log.json \
+            data/knowledge_base.json \
+            logs/debug.log \
+            logs/llm_trace.jsonl \
+            /tmp/elaina_runtime.log 2>/dev/null || true
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in "/tmp/${bundle_name}" \
+            -out "${GITHUB_WORKSPACE}/${enc_name}" \
+            -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
+          rm -f "/tmp/${bundle_name}" "/tmp/elaina_runtime.log"
+          echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Push encrypted failure bundle to Elaina
+        if: (steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'failure') && steps.build_failure_bundle.outputs.enc_file != ''
+        id: push_failure_bundle
+        working-directory: elaina
+        run: |
+          set +e
+          enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
+          mkdir -p secure_failures
+          cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
+
+          git add "secure_failures/${enc_file}" >/dev/null 2>&1 || true
+          git commit -m "伊蕾娜应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1 || true
+          if git push origin main >/dev/null 2>&1; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload encrypted fallback artifact
+        if: (steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'failure') && steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: elaina-encrypted-failure-bundle
+          retention-days: 1
+          if-no-files-found: error
+          path: ${{ steps.build_failure_bundle.outputs.enc_file }}
+
+      - name: Cleanup transient runtime log
+        if: always()
+        run: rm -f /tmp/elaina_runtime.log
