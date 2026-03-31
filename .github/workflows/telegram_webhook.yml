@@ -152,8 +152,12 @@ jobs:
 
             if ! git rebase origin/main >/dev/null 2>&1; then
               if [ -n "$(git ls-files -u)" ]; then
-                git checkout --ours -- data/tenshi_log.json logs/debug.log logs/llm_trace.jsonl || true
-                git add data/tenshi_log.json logs/debug.log logs/llm_trace.jsonl || true
+                git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
+                  if [ -e "$cf" ]; then
+                    git checkout --ours -- "$cf" >/dev/null 2>&1 || true
+                    git add -- "$cf" >/dev/null 2>&1 || true
+                  fi
+                done
                 git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
               else
                 git rebase --abort >/dev/null 2>&1 || true

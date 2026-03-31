@@ -1,0 +1,207 @@
+name: Scheduled Update (Calling)
+
+on:
+  schedule:
+    - cron: '22 2 * * *'
+  workflow_dispatch:
+
+# 与 perception_trigger / telegram_webhook 共享同一并发组；
+# cancel-in-progress: false → 排队而不是取消，避免每日更新被抢占。
+# 但每日更新本身可能跑 10~20 分钟，若队列里已有一个 schedule 在跑，
+# 后续手动触发也会等待而不是重复运行。
+concurrency:
+  group: tenshi-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  daily_update:
+    runs-on: ubuntu-latest
+    # 每日更新最长允许 30 分钟；超时视为失败而不是无限占用并发槽
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/hisou-tenshi/calling-tenshi:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout Tenshi repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.GH_REPO }}
+          token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: tenshi
+
+      - name: Get Date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Run Log Update
+        id: update_script
+        working-directory: tenshi
+        env:
+          REPO_NAME: ${{ secrets.GH_REPO }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+        run: |
+          python src/log_update.py > /tmp/tenshi_runtime.log 2>&1
+
+      - name: Commit and Push Changes (to Tenshi repo)
+        # always() 确保脚本出错时产物也能被提交归档
+        if: always()
+        working-directory: tenshi
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "比那名居 天子"
+          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+
+          # 确保目录存在
+          mkdir -p data logs downloads
+
+          # ── 归档当日日志到 logs/archive/<DATE>/ ──────────────────────────────
+          DATE="${{ steps.date.outputs.date }}"
+          mkdir -p "logs/archive/${DATE}"
+
+          # 用 find + cp，规避 busybox 不支持 read -d '' 的问题
+          # 只拷贝 logs/ 根目录下的文件（不递归进 archive/）
+          find logs -maxdepth 1 -type f -exec cp -f {} "logs/archive/${DATE}/" \; || true
+
+          # ── 清理过期归档（只保留近 3 天）────────────────────────────────────
+          # 目录名格式 YYYY-MM-DD，字典序即时间序，sort 后 head -n -3 删除最旧的
+          find logs/archive -mindepth 1 -maxdepth 1 -type d -name '????-??-??' | sort | head -n -3 | xargs -r rm -rf
+
+          # ── 清理 logs/ 根目录的运行时文件（归档后才删）────────────────────
+          find logs -mindepth 1 -maxdepth 1 ! -name 'archive' -exec rm -rf -- {} + || true
+          mkdir -p downloads logs
+          touch downloads/.gitkeep
+          touch logs/.gitkeep
+
+          rm -rf downloads/* || true
+
+          git add data/ logs/ downloads/ >/dev/null 2>&1 || true
+
+          if git commit -m "天子例行巡狩：记忆更新与卷宗整理 [skip ci]" >/dev/null 2>&1; then
+            # ── 防冲突推送：最多重试 3 次 ────────────────────────────────────
+            for attempt in 1 2 3; do
+              if git push origin main >/dev/null 2>&1; then
+                exit 0
+              fi
+
+              git fetch origin main >/dev/null 2>&1
+
+              if ! git rebase origin/main >/dev/null 2>&1; then
+                if [ -n "$(git ls-files -u)" ]; then
+                  # 只对确实存在且有冲突的文件执行 checkout --ours
+                  # 先列出冲突路径，再逐一判断是否存在，避免 pathspec 错误
+                  git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
+                    if [ -e "$cf" ]; then
+                      git checkout --ours -- "$cf" >/dev/null 2>&1 || true
+                      git add -- "$cf" >/dev/null 2>&1 || true
+                    fi
+                  done
+                  git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
+                else
+                  git rebase --abort >/dev/null 2>&1 || true
+                fi
+              fi
+            done
+
+            git push origin main >/dev/null 2>&1
+          else
+            echo "No changes to commit, skipping push."
+          fi
+
+      - name: Build Release Package
+        if: steps.update_script.outcome == 'success'
+        working-directory: tenshi
+        run: |
+          mkdir -p release_bundle/downloads
+
+          if [ -d "downloads" ]; then
+            cp -a downloads/. release_bundle/downloads/ || true
+          fi
+          if [ -f "data/knowledge_base.json" ]; then
+            cp -f "data/knowledge_base.json" release_bundle/
+          fi
+          if [ -f "data/tenshi_log.json" ]; then
+            cp -f "data/tenshi_log.json" release_bundle/
+          fi
+
+          zip -r release_payload.zip release_bundle >/dev/null 2>&1
+
+      - name: Create Daily Backup Release
+        if: steps.update_script.outcome == 'success'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: backup-${{ steps.date.outputs.date }}
+          name: Daily Backup ${{ steps.date.outputs.date }}
+          files: |
+            tenshi/release_payload.zip
+          draft: false
+          prerelease: false
+          repository: ${{ secrets.GH_REPO }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+
+      - name: Build encrypted failure bundle
+        if: steps.update_script.outcome == 'failure' || failure()
+        id: build_failure_bundle
+        working-directory: tenshi
+        env:
+          MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
+        run: |
+          set -e
+          test -n "$MASTER_KEY_SOURCE"
+          bundle_name="tenshi_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
+          enc_name="${bundle_name}.enc"
+          tar -czf "/tmp/${bundle_name}" \
+            data/tenshi_log.json \
+            data/knowledge_base.json \
+            logs/debug.log \
+            logs/llm_trace.jsonl \
+            /tmp/tenshi_runtime.log 2>/dev/null || true
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in "/tmp/${bundle_name}" \
+            -out "${GITHUB_WORKSPACE}/${enc_name}" \
+            -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
+          rm -f "/tmp/${bundle_name}" "/tmp/tenshi_runtime.log"
+          echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Push encrypted failure bundle to Tenshi
+        if: (steps.update_script.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != ''
+        id: push_failure_bundle
+        working-directory: tenshi
+        run: |
+          set +e
+          enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
+          mkdir -p secure_failures
+          cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
+          git add "secure_failures/${enc_file}" >/dev/null 2>&1 || true
+          git commit -m "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1 || true
+          if git push origin main >/dev/null 2>&1; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload encrypted fallback artifact
+        if: (steps.update_script.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenshi-encrypted-schedule-failure-${{ steps.date.outputs.date }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ steps.build_failure_bundle.outputs.enc_file }}
+
+      - name: Cleanup transient runtime log
+        if: always()
+        run: rm -f /tmp/tenshi_runtime.log
