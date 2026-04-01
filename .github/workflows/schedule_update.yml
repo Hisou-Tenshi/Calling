@@ -52,6 +52,7 @@ jobs:
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
         run: |
           python src/log_update.py > /tmp/tenshi_runtime.log 2>&1
 
