@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   packages: read
 
 jobs:
@@ -125,13 +125,19 @@ jobs:
           if [ -f "data/tenshi_log.json" ]; then
             cp -f "data/tenshi_log.json" release_bundle/
           fi
+          if [ -f "data/summary_cursor.json" ]; then
+            cp -f "data/summary_cursor.json" release_bundle/
+          fi
 
           zip -r release_payload.zip release_bundle >/dev/null 2>&1
 
       - name: Create Daily Backup Release
         if: steps.update_script.outcome == 'success'
+        id: create_backup_release
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
           tag_name: backup-${{ steps.date.outputs.date }}
           name: Daily Backup ${{ steps.date.outputs.date }}
           files: |
@@ -141,6 +147,15 @@ jobs:
           repository: ${{ secrets.ELAINA_REPO || 'hinanawitenshi/Elaina' }}
         env:
           GITHUB_TOKEN: ${{ secrets.ELAINA_BOT_ACTION_TOKEN }}
+
+      - name: Upload backup artifact fallback
+        if: steps.update_script.outcome == 'success' && steps.create_backup_release.outcome != 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: elaina-daily-backup-${{ steps.date.outputs.date }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: elaina/release_payload.zip
 
       - name: Build encrypted failure bundle
         if: steps.update_script.outcome == 'failure' || failure()
