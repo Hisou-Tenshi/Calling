@@ -50,6 +50,8 @@ jobs:
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
+          DAILY_SUMMARY_CUTOFF_HOUR: "4"
+          DAILY_SUMMARY_SILENCE_THRESHOLD_SECONDS: "10800"
         run: |
           python src/log_update.py > /tmp/elaina_runtime.log 2>&1
 
