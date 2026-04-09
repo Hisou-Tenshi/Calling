@@ -112,6 +112,8 @@ jobs:
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
+          GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

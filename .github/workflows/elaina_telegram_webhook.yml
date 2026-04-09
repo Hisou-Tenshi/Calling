@@ -108,6 +108,8 @@ jobs:
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           TAVILY_KEY: ${{ secrets.TAVILY_KEY }}
+          AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
+          GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           MSG_TEXT: ${{ github.event.client_payload.text }}
           MSG_CHAT_ID: ${{ github.event.client_payload.chat_id }}
           MSG_USER_ID: ${{ github.event.client_payload.user_id }}
