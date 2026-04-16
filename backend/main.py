@@ -309,7 +309,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def api_health():
-        return {"ok": True}
+        return {"ok": True, "is_vercel": bool(os.getenv("VERCEL"))}
 
     # ----------------------------
     # Auth endpoints (cookie sessions)

@@ -61,7 +61,8 @@ const newConvBtn = $("#newConvBtn");
 const convListEl = $("#convList");
 
 const systemPromptEl = $("#systemPrompt");
-const personaTemplatesEl = $("#personaTemplates");
+const personaSeriousSelectEl = $("#personaSeriousSelect");
+const personaFunSelectEl = $("#personaFunSelect");
 
 let conversationId = null;
 let messages = []; // [{role:'user'|'assistant', content:string}]
@@ -72,48 +73,80 @@ let chatAbortController = null;
 
 let authedUser = null;
 let trialOnly = false;
+let isVercelRuntime = false;
 
 const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Draft persona templates. You can edit the prompt texts later.
-const PERSONA_TEMPLATES = [
-  {
-    id: "default-helpful",
-    title: "默认·严谨助理",
-    prompt: [
-      "你是一个严谨、可靠的助手。",
-      "优先给出结论，其次给出必要的推理与步骤。",
-      "遇到不确定的信息要明确标注不确定，并给出可验证的下一步。",
-    ].join("\n"),
-  },
-  {
-    id: "senior-dev",
-    title: "资深工程师",
-    prompt: [
-      "你是资深软件工程师。",
-      "输出偏工程落地：先给可执行方案，再给关键代码/命令，再给验证步骤。",
-      "默认考虑边界条件、错误处理与可维护性。",
-    ].join("\n"),
-  },
-  {
-    id: "teacher",
-    title: "讲师·循序渐进",
-    prompt: [
-      "你是耐心的讲师。",
-      "用循序渐进的方式解释概念，配合小例子。",
-      "尽量避免跳步；如果需要前置知识，先补齐再继续。",
-    ].join("\n"),
-  },
-  {
-    id: "translator",
-    title: "双语翻译",
-    prompt: [
-      "你是专业的中英双语翻译与润色助手。",
-      "保持术语一致；必要时给出多个译法并说明取舍。",
-      "对专业内容优先准确，其次自然。",
-    ].join("\n"),
-  },
-];
+const PERSONA_TEMPLATES = {
+  serious: [
+    {
+      id: "default-helpful",
+      title: "默认·严谨助理",
+      prompt: [
+        "你是一个严谨、可靠的助手。",
+        "优先给出结论，其次给出必要的推理与步骤。",
+        "遇到不确定的信息要明确标注不确定，并给出可验证的下一步。",
+      ].join("\n"),
+    },
+    {
+      id: "senior-dev",
+      title: "资深工程师",
+      prompt: [
+        "你是资深软件工程师。",
+        "输出偏工程落地：先给可执行方案，再给关键代码/命令，再给验证步骤。",
+        "默认考虑边界条件、错误处理与可维护性。",
+      ].join("\n"),
+    },
+    {
+      id: "teacher",
+      title: "讲师·循序渐进",
+      prompt: [
+        "你是耐心的讲师。",
+        "用循序渐进的方式解释概念，配合小例子。",
+        "尽量避免跳步；如果需要前置知识，先补齐再继续。",
+      ].join("\n"),
+    },
+    {
+      id: "translator",
+      title: "双语翻译",
+      prompt: [
+        "你是专业的中英双语翻译与润色助手。",
+        "保持术语一致；必要时给出多个译法并说明取舍。",
+        "对专业内容优先准确，其次自然。",
+      ].join("\n"),
+    },
+  ],
+  fun: [
+    {
+      id: "catgirl",
+      title: "猫娘角色扮演",
+      prompt: [
+        "你是活泼的猫娘角色，语气可爱。",
+        "在保证信息正确的前提下，表达可以轻松有趣。",
+        "避免不合规内容，遇到边界问题要保持克制与安全。",
+      ].join("\n"),
+    },
+    {
+      id: "chuunibyou",
+      title: "中二魔法使",
+      prompt: [
+        "你是中二风格的魔法使角色。",
+        "可使用戏剧化表达，但回答必须保持事实正确和可执行。",
+        "专业内容先给结论，再加风格化包装。",
+      ].join("\n"),
+    },
+    {
+      id: "villain",
+      title: "反派军师",
+      prompt: [
+        "你是冷静的反派军师角色。",
+        "表达锋利但不攻击用户，始终保持帮助意图。",
+        "技术方案强调策略、风险和备选路径。",
+      ].join("\n"),
+    },
+  ],
+};
 
 function safeLocalStorageGet(key, fallback = "") {
   try {
@@ -129,6 +162,15 @@ function safeLocalStorageSet(key, value) {
   } catch {}
 }
 
+function applyPersonaTemplate(template, category) {
+  if (!template || !systemPromptEl) return;
+  systemPromptEl.value = template.prompt || "";
+  safeLocalStorageSet("calling_system_prompt", systemPromptEl.value || "");
+  if (category === "serious" && personaFunSelectEl) personaFunSelectEl.value = "";
+  if (category === "fun" && personaSeriousSelectEl) personaSeriousSelectEl.value = "";
+  setStatus(`Applied system prompt template: ${template.title}`);
+}
+
 function initSystemPromptUI() {
   if (systemPromptEl) {
     const saved = safeLocalStorageGet("calling_system_prompt", "");
@@ -138,22 +180,44 @@ function initSystemPromptUI() {
     });
   }
 
-  if (personaTemplatesEl) {
-    personaTemplatesEl.innerHTML = "";
-    for (const t of PERSONA_TEMPLATES) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn template-btn";
-      btn.textContent = t.title;
-      btn.addEventListener("click", () => {
-        if (!systemPromptEl) return;
-        systemPromptEl.value = t.prompt || "";
-        safeLocalStorageSet("calling_system_prompt", systemPromptEl.value || "");
-        setStatus(`Applied system prompt template: ${t.title}`);
-      });
-      personaTemplatesEl.appendChild(btn);
+  if (personaSeriousSelectEl) {
+    for (const t of PERSONA_TEMPLATES.serious) {
+      const o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.title;
+      personaSeriousSelectEl.appendChild(o);
     }
+    personaSeriousSelectEl.addEventListener("change", () => {
+      const selected = PERSONA_TEMPLATES.serious.find((t) => t.id === personaSeriousSelectEl.value);
+      if (selected) applyPersonaTemplate(selected, "serious");
+    });
   }
+
+  if (personaFunSelectEl) {
+    for (const t of PERSONA_TEMPLATES.fun) {
+      const o = document.createElement("option");
+      o.value = t.id;
+      o.textContent = t.title;
+      personaFunSelectEl.appendChild(o);
+    }
+    personaFunSelectEl.addEventListener("change", () => {
+      const selected = PERSONA_TEMPLATES.fun.find((t) => t.id === personaFunSelectEl.value);
+      if (selected) applyPersonaTemplate(selected, "fun");
+    });
+  }
+}
+
+async function detectRuntimeEnvironment() {
+  try {
+    const res = await fetch("/api/health");
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      isVercelRuntime = !!data.is_vercel;
+      return;
+    }
+  } catch {}
+  const host = String(window.location.hostname || "");
+  isVercelRuntime = host.endsWith(".vercel.app");
 }
 
 function setStatus(text) {
@@ -1022,6 +1086,8 @@ async function checkAuth() {
 }
 
 async function boot() {
+  await detectRuntimeEnvironment();
+  applyRuntimeVisibility();
   const ok = await checkAuth();
   await loadModels();
   renderMessages();
@@ -1453,6 +1519,7 @@ const logToggleBtn  = document.getElementById('logToggleBtn');
 const logCloseBtn   = document.getElementById('logCloseBtn');
 const logClearBtn   = document.getElementById('logClearBtn');
 const shutdownBtn   = document.getElementById('serverShutdownBtn');
+const logFabGroup   = document.getElementById('logFabGroup');
 
 let logEs = null;
 let logAutoScroll = true;
@@ -1478,6 +1545,7 @@ function appendLogLine(line, level) {
 }
 
 function startLogStream() {
+  if (isVercelRuntime || !logBody) return;
   if (logEs) return;
   logEs = new EventSource('/api/logs');
   logEs.onmessage = (e) => {
@@ -1499,25 +1567,35 @@ function stopLogStream() {
   if (logEs) { logEs.close(); logEs = null; }
 }
 
-logToggleBtn.addEventListener('click', () => {
-  const visible = logPanel.style.display !== 'none';
-  if (visible) {
-    logPanel.style.display = 'none';
-    stopLogStream();
-  } else {
-    logPanel.style.display = '';
-    startLogStream();
-  }
-});
+function applyRuntimeVisibility() {
+  if (!isVercelRuntime) return;
+  if (logPanel) logPanel.style.display = "none";
+  if (logFabGroup) logFabGroup.style.display = "none";
+  stopLogStream();
+}
 
-if (logCloseBtn) {
+if (logToggleBtn && logPanel) {
+  logToggleBtn.addEventListener('click', () => {
+    if (isVercelRuntime) return;
+    const visible = logPanel.style.display !== 'none';
+    if (visible) {
+      logPanel.style.display = 'none';
+      stopLogStream();
+    } else {
+      logPanel.style.display = '';
+      startLogStream();
+    }
+  });
+}
+
+if (logCloseBtn && logPanel) {
   logCloseBtn.addEventListener('click', () => {
     logPanel.style.display = 'none';
     stopLogStream();
   });
 }
 
-if (logClearBtn) {
+if (logClearBtn && logBody) {
   logClearBtn.addEventListener('click', () => {
     logBody.innerHTML = '';
   });
@@ -1534,12 +1612,13 @@ if (logBody) {
 // Server shutdown button
 if (shutdownBtn) {
   shutdownBtn.addEventListener('click', async () => {
+    if (isVercelRuntime) return;
     if (!confirm('Stop the server? You will need to restart it manually.')) return;
     shutdownBtn.disabled = true;
     try {
       await fetch('/api/server/shutdown', { method: 'POST' });
       appendLogLine('[UI] Shutdown requested. Server stopping...', 'WARNING');
-      if (logPanel.style.display === 'none') {
+      if (logPanel && logPanel.style.display === 'none') {
         logPanel.style.display = '';
         startLogStream();
       }

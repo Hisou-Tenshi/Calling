@@ -101,9 +101,14 @@
                 spellcheck="false"
               ></textarea>
               <div class="muted" style="margin-top:6px; line-height:1.35">
-                Persona templates (click to apply):
+                Persona templates:
               </div>
-              <div id="personaTemplates" class="template-grid" aria-label="Persona templates"></div>
+              <select id="personaSeriousSelect" class="input" aria-label="Serious persona templates">
+                <option value="">正经模板（实用助手）</option>
+              </select>
+              <select id="personaFunSelect" class="input" aria-label="Fun persona templates">
+                <option value="">不正经模板（角色扮演）</option>
+              </select>
             </div>
 
             <div class="field toggles">
@@ -262,7 +267,7 @@
       <div id="logBody" class="log-body"></div>
     </div>
     <!-- Log toggle + server controls (fixed bottom-right) -->
-    <div class="log-fab-group">
+    <div id="logFabGroup" class="log-fab-group">
       <button type="button" id="serverShutdownBtn" class="log-fab danger" title="Stop server">⏹</button>
       <button type="button" id="logToggleBtn" class="log-fab" title="Toggle logs">📋</button>
     </div>
