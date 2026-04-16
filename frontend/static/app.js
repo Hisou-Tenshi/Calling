@@ -4,6 +4,7 @@ const messagesEl = $("#messages");
 const chatForm = $("#chatForm");
 const promptEl = $("#prompt");
 const sendBtn = $("#sendBtn");
+const stopBtn = $("#stopBtn");
 const clearBtn = $("#clearBtn");
 const statusEl = $("#status");
 
@@ -22,9 +23,159 @@ let conversationId = null;
 let messages = []; // [{role:'user'|'assistant', content:string}]
 let uploadedFiles = []; // ["data/uploads/xxx"]
 let conversationsCache = [];
+let chatBusy = false;
+let chatAbortController = null;
 
 function setStatus(text) {
   statusEl.textContent = text || "";
+}
+
+function escapeHtml(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderInlineMarkdown(src) {
+  let out = escapeHtml(src || "");
+  out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+  out = out.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  return out;
+}
+
+function renderCodeLines(lines) {
+  return lines
+    .map((line, idx) => {
+      const cls = idx % 2 === 0 ? "code-line blue" : "code-line pink";
+      const body = line.length ? escapeHtml(line) : "&nbsp;";
+      return `<span class="${cls}">${body}</span>`;
+    })
+    .join("");
+}
+
+function renderUserTextLines(lines) {
+  return lines
+    .map((line) => `<span class="user-line">${escapeHtml(line.length ? line : " ")}</span>`)
+    .join("");
+}
+
+function renderMarkdownToHtml(mdText) {
+  const text = String(mdText || "");
+  const lines = text.split(/\r?\n/);
+  const html = [];
+  let i = 0;
+  let para = [];
+
+  function flushPara() {
+    if (!para.length) return;
+    html.push(`<p>${renderInlineMarkdown(para.join(" ").trim())}</p>`);
+    para = [];
+  }
+
+  while (i < lines.length) {
+    const line = lines[i] || "";
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushPara();
+      i += 1;
+      continue;
+    }
+
+    const codeFence = trimmed.match(/^```(\w+)?$/);
+    if (codeFence) {
+      flushPara();
+      const lang = codeFence[1] || "";
+      i += 1;
+      const buf = [];
+      while (i < lines.length && !String(lines[i] || "").trim().startsWith("```")) {
+        buf.push(lines[i] || "");
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      const codeText = buf.join("\n");
+      const fullCodeHtml = renderCodeLines(buf);
+      if (buf.length > 5) {
+        html.push(
+          `<div class="code-block-wrap collapsed">` +
+          `<button type="button" class="code-copy-btn" data-code="${encodeURIComponent(codeText)}">复制</button>` +
+          `<pre class="code-pre"><code>${fullCodeHtml}</code></pre>` +
+          `<button type="button" class="code-toggle-btn" data-open="0" data-expand-label="${escapeHtml(`展开剩余 ${buf.length - 5} 行${lang ? ` · ${lang}` : ""}`)}">展开剩余 ${buf.length - 5} 行${lang ? ` · ${escapeHtml(lang)}` : ""}</button>` +
+          `</div>`
+        );
+      } else {
+        html.push(
+          `<div class="code-block-wrap">` +
+          `<button type="button" class="code-copy-btn" data-code="${encodeURIComponent(codeText)}">复制</button>` +
+          `<pre class="code-pre"><code>${fullCodeHtml}</code></pre>` +
+          `</div>`
+        );
+      }
+      continue;
+    }
+
+    if (/^\s*---+\s*$/.test(line)) {
+      flushPara();
+      html.push("<hr />");
+      i += 1;
+      continue;
+    }
+
+    const h = line.match(/^(#{1,6})\s+(.+)$/);
+    if (h) {
+      flushPara();
+      const level = h[1].length;
+      html.push(`<h${level}>${renderInlineMarkdown(h[2])}</h${level}>`);
+      i += 1;
+      continue;
+    }
+
+    const bq = line.match(/^\s*>\s?(.+)$/);
+    if (bq) {
+      flushPara();
+      html.push(`<blockquote>${renderInlineMarkdown(bq[1])}</blockquote>`);
+      i += 1;
+      continue;
+    }
+
+    const ul = line.match(/^\s*[-*]\s+(.+)$/);
+    if (ul) {
+      flushPara();
+      const items = [];
+      while (i < lines.length) {
+        const m = String(lines[i] || "").match(/^\s*[-*]\s+(.+)$/);
+        if (!m) break;
+        items.push(`<li>${renderInlineMarkdown(m[1])}</li>`);
+        i += 1;
+      }
+      html.push(`<ul>${items.join("")}</ul>`);
+      continue;
+    }
+
+    const ol = line.match(/^\s*\d+\.\s+(.+)$/);
+    if (ol) {
+      flushPara();
+      const items = [];
+      while (i < lines.length) {
+        const m = String(lines[i] || "").match(/^\s*\d+\.\s+(.+)$/);
+        if (!m) break;
+        items.push(`<li>${renderInlineMarkdown(m[1])}</li>`);
+        i += 1;
+      }
+      html.push(`<ol>${items.join("")}</ol>`);
+      continue;
+    }
+
+    para.push(line);
+    i += 1;
+  }
+
+  flushPara();
+  return html.join("\n");
 }
 
 function isCurrentConversationEmpty() {
@@ -33,9 +184,11 @@ function isCurrentConversationEmpty() {
 
 function renderMessages() {
   messagesEl.innerHTML = "";
-  for (const m of messages) {
+  for (let i = 0; i < messages.length; i++) {
+    const m = messages[i];
     const div = document.createElement("div");
     div.className = `msg ${m.role}`;
+    div.dataset.index = String(i);
     const meta = document.createElement("div");
     meta.className = "msg-meta";
     if (m.role === "user") {
@@ -44,12 +197,61 @@ function renderMessages() {
       meta.textContent = (m.model || "").trim() ? m.model : "Model";
     }
 
+    const hasThinking = m.role === "assistant" && (m.thinking || "").trim();
+    if (hasThinking) {
+      const thinkingWrap = document.createElement("details");
+      thinkingWrap.className = "msg-thinking-wrap";
+      thinkingWrap.open = false;
+      const summary = document.createElement("summary");
+      summary.textContent = "模型思考（默认折叠）";
+      const thinking = document.createElement("div");
+      thinking.className = "msg-thinking";
+      thinking.textContent = m.thinking || "";
+      thinkingWrap.appendChild(summary);
+      thinkingWrap.appendChild(thinking);
+      div.appendChild(meta);
+      div.appendChild(thinkingWrap);
+    } else {
+      div.appendChild(meta);
+    }
+
     const content = document.createElement("div");
     content.className = "msg-content";
-    content.textContent = m.content || "";
-
-    div.appendChild(meta);
+    if (m.role === "assistant") {
+      content.innerHTML = renderMarkdownToHtml(m.content || "");
+    } else {
+      const userText = String(m.content || "");
+      const userLines = userText.split(/\r?\n/);
+      if (userLines.length > 3) {
+        content.innerHTML = `
+          <div class="user-text-wrap collapsed">
+            <div class="user-text-lines">${renderUserTextLines(userLines)}</div>
+            <button type="button" class="user-toggle-btn" data-open="0">展开剩余 ${userLines.length - 3} 行</button>
+          </div>
+        `;
+      } else {
+        content.textContent = userText;
+      }
+    }
     div.appendChild(content);
+
+    if (m.role === "assistant") {
+      const actions = document.createElement("div");
+      actions.className = "msg-actions";
+      actions.innerHTML = `
+        <button type="button" class="btn msg-action" data-act="copy-md">复制MD</button>
+        <button type="button" class="btn msg-action" data-act="copy-plain">复制文本</button>
+        <button type="button" class="btn msg-action" data-act="retry">重试</button>
+        <button type="button" class="btn msg-action" data-act="retry-remodel">更换模型重试</button>
+        <button type="button" class="btn msg-action" data-act="retry-verbose">详尽一点</button>
+        <button type="button" class="btn msg-action" data-act="retry-brief">简短一点</button>
+        <button type="button" class="btn msg-action" data-act="retry-structured">更格式化</button>
+        <button type="button" class="btn msg-action" data-act="retry-natural">更自然语言</button>
+        <button type="button" class="btn msg-action" data-act="edit-fork">修改并Fork</button>
+        ${m.interrupted ? '<button type="button" class="btn msg-action primary" data-act="continue">继续输出</button>' : ""}
+      `;
+      div.appendChild(actions);
+    }
     messagesEl.appendChild(div);
   }
   messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -254,7 +456,8 @@ async function uploadFiles() {
   }
 }
 
-async function sendMessage() {
+async function sendMessage(opts = {}) {
+  if (chatBusy) return;
   const model = getSelectedModel();
   if (!model) {
     setStatus("Please select or type a model id.");
@@ -266,43 +469,117 @@ async function sendMessage() {
   const rag_enabled = !!ragToggle.checked;
   const force_web_search = !!forceSearchToggle.checked;
 
+  const sourceMessages = Array.isArray(opts.messagesOverride) ? opts.messagesOverride : messages;
   const body = {
     conversation_id: conversationId,
     model,
-    messages: messages,
+    messages: sourceMessages,
     rag_enabled,
     force_web_search,
     uploaded_files: uploadedFiles,
   };
+  if (opts.continueFrom) body.continue_from = opts.continueFrom;
 
   setStatus("Waiting for assistant...");
   sendBtn.disabled = true;
+  if (stopBtn) stopBtn.style.display = "";
+  chatBusy = true;
+  chatAbortController = new AbortController();
   try {
-    const res = await fetch("/api/chat", {
+    // Pre-insert an assistant placeholder and stream into it.
+    const assistantMsg = { role: "assistant", content: "", model, thinking: "" };
+    messages = sourceMessages.slice();
+    messages.push(assistantMsg);
+    renderMessages();
+
+    const res = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: chatAbortController.signal,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Chat failed");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Chat failed");
+    }
 
-    const ans = data.assistant || "";
-    messages.push({ role: "assistant", content: ans, model });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let donePayload = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+
+      for (const part of parts) {
+        const eventMatch = part.match(/^event: ([\w_]+)/m);
+        const dataMatch = part.match(/^data: (.+)$/m);
+        if (!eventMatch || !dataMatch) continue;
+        let data;
+        try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+        const evtName = eventMatch[1];
+
+        if (evtName === "status") {
+          setStatus(data.message || "Assistant is thinking...");
+        } else if (evtName === "thinking_delta") {
+          if (data.transient) {
+            setStatus(data.text || "Thinking...");
+          } else {
+            assistantMsg.thinking = (assistantMsg.thinking || "") + (data.text || "");
+            renderMessages();
+            setStatus("Received thinking stream, waiting for final answer...");
+          }
+        } else if (evtName === "answer_delta") {
+          assistantMsg.content = (assistantMsg.content || "") + (data.text || "");
+          renderMessages();
+          setStatus("Streaming answer...");
+        } else if (evtName === "done") {
+          donePayload = data || {};
+        } else if (evtName === "error") {
+          throw new Error(data.detail || "Chat failed");
+        }
+      }
+    }
+
+    if (!donePayload) throw new Error("Stream ended unexpectedly.");
+    assistantMsg.content = donePayload.assistant || assistantMsg.content || "";
+    assistantMsg.thinking = donePayload.thinking || assistantMsg.thinking || "";
+    assistantMsg.interrupted = false;
     renderMessages();
 
-    if (forceSearchToggle.checked && data.web_search_called) {
+    if (forceSearchToggle.checked && donePayload.web_search_called) {
       setStatus("web_search used.");
-    } else if (forceSearchToggle.checked && !data.web_search_called) {
+    } else if (forceSearchToggle.checked && !donePayload.web_search_called) {
       setStatus("web_search not detected (model may have answered anyway).");
     } else {
       setStatus("Done.");
     }
-
     await refreshConversationList();
   } catch (e) {
+    if (e?.name === "AbortError") {
+      const lastAborted = messages[messages.length - 1];
+      if (lastAborted && lastAborted.role === "assistant" && (lastAborted.content || "").trim()) {
+        lastAborted.interrupted = true;
+      }
+      renderMessages();
+      setStatus("Output interrupted.");
+      return;
+    }
+    const last = messages[messages.length - 1];
+    if (last && last.role === "assistant" && !last.content) {
+      messages.pop();
+      renderMessages();
+    }
     setStatus(String(e?.message || e));
   } finally {
     sendBtn.disabled = false;
+    if (stopBtn) stopBtn.style.display = "none";
+    chatAbortController = null;
+    chatBusy = false;
   }
 }
 
@@ -319,6 +596,160 @@ chatForm.addEventListener("submit", async (e) => {
 
   await sendMessage();
 });
+
+async function runRetry(assistantIndex, retryInstruction) {
+  if (chatBusy) return;
+  const userIndex = assistantIndex - 1;
+  if (assistantIndex < 0 || userIndex < 0 || messages[userIndex]?.role !== "user") {
+    setStatus("Cannot retry this message.");
+    return;
+  }
+  const branch = messages.slice(0, assistantIndex);
+  if (retryInstruction) {
+    branch.push({ role: "user", content: retryInstruction });
+  }
+  await sendMessage({ messagesOverride: branch });
+}
+
+async function forkFromEditedPrompt(assistantIndex) {
+  const userIndex = assistantIndex - 1;
+  if (assistantIndex < 0 || userIndex < 0 || messages[userIndex]?.role !== "user") {
+    setStatus("请选择包含 user->assistant 的轮次。");
+    return;
+  }
+  const oldPrompt = messages[userIndex]?.content || "";
+  const edited = window.prompt("修改该轮提示词（将从这里 fork 新会话）", oldPrompt);
+  if (edited == null) return;
+  const branch = messages.slice(0, userIndex);
+  branch.push({ role: "user", content: edited.trim() });
+
+  try {
+    const res = await fetch("/api/conversations/fork", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        messages: branch,
+        uploaded_files: uploadedFiles,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Fork failed");
+    conversationId = data.conversation_id;
+    messages = branch;
+    renderMessages();
+    await refreshConversationList();
+    await sendMessage();
+  } catch (e) {
+    setStatus(String(e?.message || e));
+  }
+}
+
+messagesEl.addEventListener("click", async (e) => {
+  const userToggleBtn = e.target.closest(".user-toggle-btn");
+  if (userToggleBtn) {
+    const userWrap = userToggleBtn.closest(".user-text-wrap");
+    if (!userWrap) return;
+    const open = userToggleBtn.dataset.open === "1";
+    if (open) {
+      userWrap.classList.add("collapsed");
+      userToggleBtn.dataset.open = "0";
+      const total = userWrap.querySelectorAll(".user-line").length;
+      userToggleBtn.textContent = `展开剩余 ${Math.max(0, total - 3)} 行`;
+    } else {
+      userWrap.classList.remove("collapsed");
+      userToggleBtn.dataset.open = "1";
+      userToggleBtn.textContent = "向上折叠";
+    }
+    return;
+  }
+
+  const toggleBtn = e.target.closest(".code-toggle-btn");
+  if (toggleBtn) {
+    const wrap = toggleBtn.closest(".code-block-wrap");
+    if (!wrap) return;
+    const open = toggleBtn.dataset.open === "1";
+    if (open) {
+      wrap.classList.add("collapsed");
+      toggleBtn.dataset.open = "0";
+      toggleBtn.textContent = toggleBtn.dataset.expandLabel || "展开剩余内容";
+    } else {
+      wrap.classList.remove("collapsed");
+      toggleBtn.dataset.open = "1";
+      toggleBtn.textContent = "向上折叠";
+    }
+    return;
+  }
+
+  const copyBtn = e.target.closest(".code-copy-btn");
+  if (copyBtn) {
+    const raw = decodeURIComponent(copyBtn.dataset.code || "");
+    await navigator.clipboard.writeText(raw);
+    copyBtn.textContent = "已复制";
+    setTimeout(() => { copyBtn.textContent = "复制"; }, 1200);
+    return;
+  }
+
+  const btn = e.target.closest(".msg-action");
+  if (!btn) return;
+  const wrap = btn.closest(".msg");
+  if (!wrap) return;
+  const idx = Number(wrap.dataset.index || -1);
+  if (!Number.isInteger(idx) || idx < 0) return;
+  const msg = messages[idx] || {};
+  const act = btn.dataset.act;
+
+  if (act === "copy-md") {
+    await navigator.clipboard.writeText(msg.content || "");
+    setStatus("Copied markdown.");
+    return;
+  }
+  if (act === "copy-plain") {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = renderMarkdownToHtml(msg.content || "");
+    await navigator.clipboard.writeText(tmp.textContent || "");
+    setStatus("Copied plaintext.");
+    return;
+  }
+  if (act === "retry") return runRetry(idx, "");
+  if (act === "retry-remodel") {
+    const currentModel = getSelectedModel();
+    const oldModel = (msg.model || "").trim();
+    if (!currentModel) {
+      setStatus("请先在右侧选择模型。");
+      return;
+    }
+    if (oldModel && oldModel === currentModel) {
+      setStatus("当前选择模型与原回复相同；如需换模型重试，请先在右侧切换模型。");
+    } else {
+      setStatus(`将使用新模型重试：${currentModel}`);
+    }
+    return runRetry(idx, "");
+  }
+  if (act === "retry-verbose") return runRetry(idx, "请在保持正确性的前提下详尽一点。");
+  if (act === "retry-brief") return runRetry(idx, "请更简短，控制在核心要点。");
+  if (act === "retry-structured") return runRetry(idx, "请用更结构化的格式回答（标题 + 要点列表）。");
+  if (act === "retry-natural") return runRetry(idx, "请改成更自然、口语化但专业的表达。");
+  if (act === "edit-fork") return forkFromEditedPrompt(idx);
+  if (act === "continue") {
+    const partial = msg.content || "";
+    if (!partial.trim()) {
+      setStatus("No partial response to continue.");
+      return;
+    }
+    const branch = messages.slice(0, idx + 1);
+    const tail = partial.slice(-800);
+    const continueHint = `Continue your previous answer from the exact point where it stopped. Do not restart or repeat earlier sections.\n\nLast emitted tail:\n${tail}`;
+    await sendMessage({ messagesOverride: branch, continueFrom: continueHint });
+    return;
+  }
+});
+
+if (stopBtn) {
+  stopBtn.addEventListener("click", () => {
+    if (chatAbortController) chatAbortController.abort();
+  });
+}
 
 newConvBtn.addEventListener("click", async () => {
   await createNewConversation();

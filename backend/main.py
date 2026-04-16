@@ -3,8 +3,11 @@ import logging
 import os
 import shutil
 import sys
+import time
 import uuid
 from collections import deque
+from queue import Empty, Queue
+from threading import Thread
 from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -193,6 +196,115 @@ def create_app() -> FastAPI:
 
     tool_exec = make_tool_exec(project_root)
 
+    def _run_chat(payload: dict[str, Any]) -> dict[str, Any]:
+        model = payload.get("model") or settings.default_chat_model
+        conversation_id = payload.get("conversation_id") or "default"
+        messages = payload.get("messages") or []
+        rag_enabled = bool(payload.get("rag_enabled"))
+        force_web_search = bool(payload.get("force_web_search"))
+        uploaded_files = payload.get("uploaded_files") or []
+        continue_from = (payload.get("continue_from") or "").strip()
+
+        if not isinstance(messages, list) or not messages:
+            raise HTTPException(status_code=400, detail="messages must be a non-empty list")
+        if rag_enabled and uploaded_files and not isinstance(uploaded_files, list):
+            raise HTTPException(status_code=400, detail="uploaded_files must be a list")
+
+        work_messages = list(messages)
+        if continue_from:
+            work_messages.append({"role": "user", "content": continue_from})
+
+        trimmed = _trim_conversation(work_messages, max_user_turns=20)
+        latest_user = _latest_user_text(trimmed)
+        if not latest_user and any(m.get("role") == "user" for m in trimmed) is False:
+            raise HTTPException(status_code=400, detail="No user content found")
+
+        rag_context = ""
+        retrieved: list[dict[str, Any]] = []
+
+        if rag_enabled:
+            if uploaded_files:
+                if embedding_fn is None:
+                    raise HTTPException(status_code=400, detail="RAG enabled but GEMINI_API_KEY (embedding) missing.")
+
+                for rel_path in uploaded_files:
+                    if not rag_store.file_has_chunks(rel_path):
+                        abs_path = os.path.join(project_root, rel_path)
+                        if os.path.exists(abs_path):
+                            with open(abs_path, "rb") as fp:
+                                raw = fp.read()
+                            ingest_file_for_rag(
+                                rag_store=rag_store,
+                                relative_file_path=rel_path,
+                                mime_type=None,
+                                file_bytes=raw,
+                                embedding_fn=embedding_fn,
+                                chunk_size=settings.rag_chunk_size,
+                                chunk_overlap=settings.rag_chunk_overlap,
+                            )
+
+                q_emb = embedding_fn(latest_user[:4000])
+                hits = rag_store.search(
+                    query_embedding=q_emb,
+                    file_paths=uploaded_files,
+                    top_k=settings.rag_top_k,
+                    threshold=None,
+                )
+                parts: list[str] = []
+                for chunk, score in hits:
+                    snippet = chunk.text
+                    if len(snippet) > 2000:
+                        snippet = snippet[:2000]
+                    parts.append(
+                        f"[{chunk.file_path} :: chunk#{chunk.chunk_index} :: sim={score:.4f}]\n{snippet}"
+                    )
+                    retrieved.append(
+                        {
+                            "file_path": chunk.file_path,
+                            "chunk_index": chunk.chunk_index,
+                            "score": score,
+                            "chars": len(snippet),
+                        }
+                    )
+                rag_context = "\n\n".join(parts)
+
+        system_prompt = build_system_prompt(force_web_search=force_web_search, rag_enabled=rag_enabled)
+        if rag_enabled and rag_context.strip():
+            system_prompt += f"\n\nRAG_CONTEXT:\n{rag_context}"
+
+        r = route_and_chat(
+            settings=settings,
+            model=model,
+            system_prompt=system_prompt,
+            messages=trimmed,
+            tool_exec=tool_exec,
+            force_web_search=force_web_search,
+            project_root_abs=project_root,
+        )
+
+        content = r.get("answer") or ""
+        thinking = r.get("thinking") or ""
+        used_web_search = bool(r.get("used_web_search"))
+        if force_web_search and not used_web_search:
+            raise HTTPException(status_code=400, detail="force_web_search enabled but web_search was not called.")
+
+        full_messages = (work_messages or []) + [
+            {"role": "assistant", "content": content, "model": model, "thinking": thinking}
+        ]
+        conversation_store.upsert_messages(conversation_id, full_messages)
+        conversation_store.set_uploaded_files(conversation_id, uploaded_files)
+
+        return {
+            "conversation_id": conversation_id,
+            "assistant": content,
+            "thinking": thinking,
+            "rag_enabled": rag_enabled,
+            "rag_used": bool(rag_context.strip()),
+            "retrieved_chunks": retrieved,
+            "web_search_called": used_web_search,
+            "model": model,
+        }
+
     @app.get("/api/models")
     def api_models():
         claude_models = [
@@ -243,6 +355,25 @@ def create_app() -> FastAPI:
         if not ok:
             raise HTTPException(status_code=404, detail="conversation not found")
         return {"deleted": True, "conversation_id": conversation_id}
+
+    @app.post("/api/conversations/fork")
+    def api_fork_conversation(payload: dict[str, Any]):
+        source_conversation_id = (payload.get("conversation_id") or "").strip()
+        fork_messages = payload.get("messages")
+        uploaded = payload.get("uploaded_files") or []
+        if not source_conversation_id:
+            raise HTTPException(status_code=400, detail="conversation_id is required")
+        if not isinstance(fork_messages, list):
+            raise HTTPException(status_code=400, detail="messages must be a list")
+        try:
+            src = conversation_store.get(source_conversation_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="source conversation not found")
+
+        new_conv = conversation_store.create_new()
+        conversation_store.upsert_messages(new_conv.conversation_id, fork_messages)
+        conversation_store.set_uploaded_files(new_conv.conversation_id, uploaded or list(src.uploaded_files or []))
+        return {"conversation_id": new_conv.conversation_id}
 
     @app.post("/api/upload")
     async def api_upload(
@@ -310,115 +441,72 @@ def create_app() -> FastAPI:
     @app.post("/api/chat")
     async def api_chat(payload: dict[str, Any]):
         try:
-            model = payload.get("model") or settings.default_chat_model
-            conversation_id = payload.get("conversation_id") or "default"
-            messages = payload.get("messages") or []
-            rag_enabled = bool(payload.get("rag_enabled"))
-            force_web_search = bool(payload.get("force_web_search"))
-            uploaded_files = payload.get("uploaded_files") or []
-
-            if not isinstance(messages, list) or not messages:
-                raise HTTPException(status_code=400, detail="messages must be a non-empty list")
-            if rag_enabled and uploaded_files and not isinstance(uploaded_files, list):
-                raise HTTPException(status_code=400, detail="uploaded_files must be a list")
-
-            trimmed = _trim_conversation(messages, max_user_turns=20)
-            latest_user = _latest_user_text(trimmed)
-            if not latest_user and any(m.get("role") == "user" for m in trimmed) is False:
-                raise HTTPException(status_code=400, detail="No user content found")
-
-            rag_context = ""
-            retrieved: list[dict[str, Any]] = []
-
-            if rag_enabled:
-                if not uploaded_files:
-                    rag_context = ""
-                else:
-                    if embedding_fn is None:
-                        raise HTTPException(status_code=400, detail="RAG enabled but GEMINI_API_KEY (embedding) missing.")
-
-                    # Ensure requested files have embeddings. If not, ingest on-demand.
-                    for rel_path in uploaded_files:
-                        if not rag_store.file_has_chunks(rel_path):
-                            abs_path = os.path.join(project_root, rel_path)
-                            if os.path.exists(abs_path):
-                                with open(abs_path, "rb") as fp:
-                                    raw = fp.read()
-                                ingest_file_for_rag(
-                                    rag_store=rag_store,
-                                    relative_file_path=rel_path,
-                                    mime_type=None,
-                                    file_bytes=raw,
-                                    embedding_fn=embedding_fn,
-                                    chunk_size=settings.rag_chunk_size,
-                                    chunk_overlap=settings.rag_chunk_overlap,
-                                )
-                            else:
-                                # Keep going; retrieval will just be empty for that file.
-                                pass
-
-                    q_emb = embedding_fn(latest_user[:4000])
-                    hits = rag_store.search(
-                        query_embedding=q_emb,
-                        file_paths=uploaded_files,
-                        top_k=settings.rag_top_k,
-                        threshold=None,
-                    )
-                    parts: list[str] = []
-                    for chunk, score in hits:
-                        snippet = chunk.text
-                        if len(snippet) > 2000:
-                            snippet = snippet[:2000]
-                        parts.append(
-                            f"[{chunk.file_path} :: chunk#{chunk.chunk_index} :: sim={score:.4f}]\n{snippet}"
-                        )
-                        retrieved.append(
-                            {
-                                "file_path": chunk.file_path,
-                                "chunk_index": chunk.chunk_index,
-                                "score": score,
-                                "chars": len(snippet),
-                            }
-                        )
-                    rag_context = "\n\n".join(parts)
-
-            system_prompt = build_system_prompt(force_web_search=force_web_search, rag_enabled=rag_enabled)
-            if rag_enabled and rag_context.strip():
-                system_prompt += f"\n\nRAG_CONTEXT:\n{rag_context}"
-
-            r = route_and_chat(
-                settings=settings,
-                model=model,
-                system_prompt=system_prompt,
-                messages=trimmed,
-                tool_exec=tool_exec,
-                force_web_search=force_web_search,
-                project_root_abs=project_root,
-            )
-
-            content = r.get("answer") or ""
-            used_web_search = bool(r.get("used_web_search"))
-            if force_web_search and not used_web_search:
-                raise HTTPException(status_code=400, detail="force_web_search enabled but web_search was not called.")
-
-            full_messages = (messages or []) + [{"role": "assistant", "content": content, "model": model}]
-            conversation_store.upsert_messages(conversation_id, full_messages)
-            conversation_store.set_uploaded_files(conversation_id, uploaded_files)
-
-            return JSONResponse(
-                {
-                    "conversation_id": conversation_id,
-                    "assistant": content,
-                    "rag_enabled": rag_enabled,
-                    "rag_used": bool(rag_context.strip()),
-                    "retrieved_chunks": retrieved,
-                    "web_search_called": used_web_search,
-                }
-            )
+            return JSONResponse(_run_chat(payload))
         except HTTPException as e:
             return JSONResponse({"detail": e.detail}, status_code=e.status_code)
         except Exception as e:
             return JSONResponse({"detail": str(e)}, status_code=500)
+
+    @app.post("/api/chat/stream")
+    async def api_chat_stream(payload: dict[str, Any]):
+        import asyncio
+
+        def _sse(event: str, data: Any) -> str:
+            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+        async def event_stream():
+            q: Queue = Queue()
+
+            def _worker():
+                try:
+                    q.put(("result", _run_chat(payload)))
+                except HTTPException as e:
+                    q.put(("http_error", {"detail": e.detail, "status_code": e.status_code}))
+                except Exception as e:
+                    q.put(("error", {"detail": str(e)}))
+
+            started_at = time.time()
+            Thread(target=_worker, daemon=True).start()
+            yield _sse("status", {"stage": "started", "message": "Assistant is thinking..."})
+
+            while True:
+                try:
+                    kind, data = q.get_nowait()
+                except Empty:
+                    elapsed = int((time.time() - started_at) * 1000)
+                    yield _sse(
+                        "thinking_delta",
+                        {"text": f"思考中... {elapsed / 1000:.1f}s", "transient": True, "elapsed_ms": elapsed},
+                    )
+                    await asyncio.sleep(0.35)
+                    continue
+
+                if kind == "http_error":
+                    yield _sse("error", {"detail": data.get("detail"), "status_code": data.get("status_code", 400)})
+                    return
+                if kind == "error":
+                    yield _sse("error", {"detail": data.get("detail"), "status_code": 500})
+                    return
+
+                thinking = (data.get("thinking") or "").strip()
+                assistant = data.get("assistant") or ""
+                if thinking:
+                    for i in range(0, len(thinking), 120):
+                        yield _sse("thinking_delta", {"text": thinking[i : i + 120], "transient": False})
+                        await asyncio.sleep(0.01)
+
+                for i in range(0, len(assistant), 120):
+                    yield _sse("answer_delta", {"text": assistant[i : i + 120]})
+                    await asyncio.sleep(0.01)
+
+                yield _sse("done", data)
+                return
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
 
     @app.post("/api/convert/tex")

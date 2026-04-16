@@ -183,9 +183,17 @@ def call_grok_with_tools(
             continue
 
         # final answer candidate
-        return {"answer": msg.content or "", "used_web_search": used_web_search}
+        return {
+            "answer": msg.content or "",
+            "used_web_search": used_web_search,
+            "thinking": (getattr(msg, "reasoning_content", None) or ""),
+        }
 
-    return {"answer": "I couldn't produce a final answer within the tool loop.", "used_web_search": used_web_search}
+    return {
+        "answer": "I couldn't produce a final answer within the tool loop.",
+        "used_web_search": used_web_search,
+        "thinking": "",
+    }
 
 
 def call_claude_with_tools(
@@ -277,10 +285,13 @@ def call_claude_with_tools(
 
             # Final response
             answer = ""
+            thinking = ""
             for block in getattr(response, "content", []) or []:
                 if getattr(block, "type", None) == "text":
                     answer += getattr(block, "text", "") or ""
-            return {"answer": answer, "used_web_search": used_web_search}
+                elif getattr(block, "type", None) == "thinking":
+                    thinking += getattr(block, "thinking", "") or getattr(block, "text", "") or ""
+            return {"answer": answer, "used_web_search": used_web_search, "thinking": thinking}
         except Exception as e:
             last_err = e
             continue
@@ -371,7 +382,7 @@ def call_gemini_with_tools(
     except Exception:
         pass
 
-    return {"answer": answer, "used_web_search": used_web_search}
+    return {"answer": answer, "used_web_search": used_web_search, "thinking": ""}
 
 
 def route_and_chat(
@@ -399,6 +410,7 @@ def route_and_chat(
     msgs = _build_provider_messages(messages)
     used_web_search_total = False
     answer = ""
+    thinking = ""
 
     for attempt in range(max_force_retries + 1):
         if attempt > 0 and force_web_search:
@@ -442,16 +454,18 @@ def route_and_chat(
 
         answer = r.get("answer") or ""
         used_web_search_total = bool(r.get("used_web_search"))
+        thinking = (r.get("thinking") or "").strip()
 
         if not force_web_search or used_web_search_total:
-            return {"answer": answer, "used_web_search": used_web_search_total}
+            return {"answer": answer, "used_web_search": used_web_search_total, "thinking": thinking}
 
     # Force-search enabled but model never triggered web_search.
     if force_web_search and not used_web_search_total:
         return {
             "answer": "Error: `force_web_search` is enabled, but the model did not call `web_search` before answering. Try again or choose a different model.",
             "used_web_search": False,
+            "thinking": thinking,
         }
 
-    return {"answer": answer, "used_web_search": used_web_search_total}
+    return {"answer": answer, "used_web_search": used_web_search_total, "thinking": thinking}
 
