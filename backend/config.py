@@ -75,7 +75,16 @@ def load_settings() -> Settings:
     if _claude_key.startswith("sk-ant-") and _anthropic_base and "anthropic.com" not in _anthropic_base:
         os.environ.pop("ANTHROPIC_BASE_URL", None)
 
-    data_dir = os.path.join(project_root, "data")
+    # On Vercel (and many serverless platforms), the deployed code directory is read-only.
+    # Use /tmp for runtime-writable files (uploads, sqlite DB, conversations).
+    calling_data_dir = (os.getenv("CALLING_DATA_DIR") or "").strip()
+    is_serverless = bool(os.getenv("VERCEL")) or bool(os.getenv("AWS_LAMBDA_FUNCTION_NAME")) or bool(os.getenv("LAMBDA_TASK_ROOT"))
+    if calling_data_dir:
+        data_dir = calling_data_dir
+    elif is_serverless:
+        data_dir = "/tmp/calling"
+    else:
+        data_dir = os.path.join(project_root, "data")
     uploads_dir = os.path.join(data_dir, "uploads")
     rag_db_path = os.path.join(data_dir, "rag.sqlite3")
 
