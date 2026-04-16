@@ -251,6 +251,16 @@ def create_app() -> FastAPI:
                     status_code=429,
                     headers={"Retry-After": str(d_trial.reset_in_seconds or 60)},
                 )
+            # global quota: shared across everyone (best with Upstash; otherwise per-instance)
+            # Count only chat requests (models endpoint should not consume quota).
+            if path in ("/api/chat", "/api/chat/stream"):
+                d_global = _rl_allow("rl:trial:global", limit=max(1, int(settings.trial_global_per_hour)), window_seconds=3600)
+                if not d_global.allowed:
+                    return JSONResponse(
+                        {"detail": "Trial quota exhausted. Please login or try again later."},
+                        status_code=429,
+                        headers={"Retry-After": str(d_global.reset_in_seconds or 3600)},
+                    )
             return await call_next(request)
 
         # everything else under /api requires auth (when auth enabled)
@@ -289,80 +299,8 @@ def create_app() -> FastAPI:
             if os.path.exists(index_path):
                 @app.get("/", include_in_schema=False)
                 async def api_index(request: Request):
-                    if (settings.auth_mode or "none").strip().lower() == "none":
-                        return FileResponse(index_path)
-                    try:
-                        require_auth(request, settings=settings)
-                        return FileResponse(index_path)
-                    except HTTPException:
-                        # Minimal inline login page (no static assets required)
-                        html = """
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Calling - Login</title>
-    <style>
-      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:#0b1220;color:#e5e7eb}
-      .wrap{max-width:720px;margin:60px auto;padding:0 18px}
-      .card{background:#111a2e;border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
-      h1{font-size:18px;margin:0 0 10px}
-      p{color:rgba(229,231,235,.75);line-height:1.6;margin:0 0 14px}
-      .row{display:flex;gap:10px;flex-wrap:wrap}
-      a.btn, button.btn{appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e5e7eb;padding:10px 12px;border-radius:12px;text-decoration:none;cursor:pointer}
-      a.btn.primary, button.btn.primary{background:#2563eb;border-color:#2563eb}
-      input{width:100%;box-sizing:border-box;background:#0b1220;border:1px solid rgba(255,255,255,.14);color:#e5e7eb;border-radius:12px;padding:10px 12px}
-      .small{font-size:12px;color:rgba(229,231,235,.6);margin-top:10px}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div class="card">
-        <h1>Login required</h1>
-        <p>This Calling instance is protected. Please login to continue.</p>
-        <div class="row">
-          <a class="btn primary" href="/api/auth/github/start">Login with GitHub</a>
-          <a class="btn" href="/api/auth/logout">Logout</a>
-        </div>
-        <div style="height:14px"></div>
-        <form id="pwForm">
-          <input id="pw" type="password" placeholder="Password (if enabled)" />
-          <div style="height:10px"></div>
-          <button class="btn" type="submit">Login with Password</button>
-        </form>
-        <div class="small">If GitHub login is enabled, use the GitHub button. If password mode is enabled, enter your password.</div>
-      </div>
-    </div>
-    <script>
-      (function(){
-        const didKey = "calling_device_id";
-        let did = "";
-        try { did = localStorage.getItem(didKey) || ""; } catch {}
-        if (!did) {
-          did = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-          try { localStorage.setItem(didKey, did); } catch {}
-        }
-        const form = document.getElementById("pwForm");
-        form.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const pw = (document.getElementById("pw").value || "").trim();
-          if (!pw) return;
-          const res = await fetch("/api/auth/password", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json", "x-calling-device": did },
-            body: JSON.stringify({ password: pw })
-          });
-          if (res.ok || res.redirected) location.href = "/";
-          else alert("Login failed");
-        });
-      })();
-    </script>
-  </body>
-</html>
-"""
-                        return HTMLResponse(content=html, status_code=401)
+                    # Always serve the same UI; auth/trial rules are enforced on /api/*.
+                    return FileResponse(index_path)
 
             if os.path.exists(static_dir):
                 app.mount("/static", StaticFiles(directory=static_dir), name="static")

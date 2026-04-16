@@ -38,6 +38,7 @@ class Settings:
     openai_compat_api_key: str | None
     openai_compat_base_url: str | None
     trial_model: str
+    trial_global_per_hour: int
 
     # ----------------------------
     # Auth / Anti-abuse (Vercel-friendly)
@@ -119,6 +120,7 @@ def load_settings() -> Settings:
         openai_compat_api_key=(os.getenv("OPENAI_COMPAT_API_KEY") or None),
         openai_compat_base_url=(os.getenv("OPENAI_COMPAT_BASE_URL") or None),
         trial_model=(os.getenv("CALLING_TRIAL_MODEL") or "glm-4.7-flash").strip(),
+        trial_global_per_hour=int(os.getenv("CALLING_TRIAL_GLOBAL_PER_HOUR") or 10),
 
         auth_mode=(os.getenv("CALLING_AUTH_MODE") or "none").strip().lower(),
         auth_secret=(os.getenv("CALLING_AUTH_SECRET") or None),

@@ -204,6 +204,14 @@ OPENAI_COMPAT_API_KEY=你的key
 
 你也可以用 OpenRouter（或任何 OpenAI 兼容的 provider），只要把 `BASE_URL` 和 `API_KEY` 换成对应值即可。
 
+另外，如果你担心 Vercel 的运行时长/额度被刷爆，可以给试用模式加一个**全站总额度**（不管多少人，每小时总共只服务 N 次试用聊天请求）：
+
+```env
+CALLING_TRIAL_GLOBAL_PER_HOUR=10
+```
+
+> 想要这个额度在多实例/冷启动下仍然严格生效，请务必配置 Upstash Redis（下一节）。
+
 #### 3.3（强烈推荐）接 Upstash Redis 做稳定限流
 
 Serverless 会冷启动，内存限流会“重置”。想要真正抗刷，推荐 Upstash：
