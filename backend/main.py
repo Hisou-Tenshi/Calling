@@ -232,6 +232,7 @@ def create_app() -> FastAPI:
             return await call_next(request)
 
         # Trial endpoints: allow unauthenticated access with strict limits
+        # (We allow conversations in trial so the UI can persist/read history.)
         trial_paths = ("/api/models", "/api/chat", "/api/chat/stream")
         auth_mode = (settings.auth_mode or "none").strip().lower()
         ip = get_request_ip(dict(request.headers), fallback="unknown")
@@ -241,7 +242,8 @@ def create_app() -> FastAPI:
         request.state.authed = authed
         request.state.trial = False
 
-        if auth_mode != "none" and (not authed) and path in trial_paths:
+        is_trial_path = (path in trial_paths) or path.startswith("/api/conversations")
+        if auth_mode != "none" and (not authed) and is_trial_path:
             request.state.trial = True
             # very strict per-ip limiter for trial
             d_trial = _rl_allow(f"rl:trial:ip:{ip}", limit=max(3, int(settings.rate_limit_per_ip_per_min // 6)))
@@ -598,7 +600,9 @@ def create_app() -> FastAPI:
                 payload["rag_enabled"] = False
                 payload["force_web_search"] = False
                 payload["uploaded_files"] = []
-                payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
+                # Keep caller-provided conversation_id so UI can persist multiple chats.
+                if not (payload.get("conversation_id") or "").strip():
+                    payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
             return JSONResponse(_run_chat(payload))
         except HTTPException as e:
             return JSONResponse({"detail": e.detail}, status_code=e.status_code)
@@ -615,7 +619,8 @@ def create_app() -> FastAPI:
             payload["rag_enabled"] = False
             payload["force_web_search"] = False
             payload["uploaded_files"] = []
-            payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
+            if not (payload.get("conversation_id") or "").strip():
+                payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
 
         def _sse(event: str, data: Any) -> str:
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"

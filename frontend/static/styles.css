@@ -453,6 +453,15 @@ textarea{
   margin: 12px 0;
 }
 label{ color: var(--muted); font-size: 12px; display:block; margin-bottom: 6px; }
+.persona-row{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.persona-row > .input{
+  flex: 1 1 0;
+  min-width: 0;
+}
 .template-grid{
   margin-top: 8px;
   display: flex;

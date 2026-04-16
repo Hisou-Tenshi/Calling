@@ -531,8 +531,9 @@ function setTrialUI(on) {
   if (forceSearchToggle) { forceSearchToggle.checked = false; forceSearchToggle.disabled = on; }
   if (fileInput) fileInput.disabled = on;
   if (uploadBtn) uploadBtn.disabled = on;
-  if (newConvBtn) newConvBtn.disabled = on;
-  if (convListEl) convListEl.style.opacity = on ? "0.55" : "";
+  // Conversations are allowed in trial (stored server-side).
+  if (newConvBtn) newConvBtn.disabled = false;
+  if (convListEl) convListEl.style.opacity = "";
 
   // Disable translate tab entry in trial mode
   document.querySelectorAll('.tab').forEach(btn => {
@@ -633,12 +634,6 @@ async function createNewConversation() {
 }
 
 async function ensureConversationSelected() {
-  // Trial mode: conversation management APIs are auth-protected on purpose.
-  // We still allow chatting, so use a deterministic local conversation id.
-  if (trialOnly) {
-    if (!conversationId) conversationId = "trial:" + CALLING_DEVICE_ID;
-    return;
-  }
   if (conversationId) return;
   await refreshConversationList();
   if (!conversationsCache || conversationsCache.length === 0) {
