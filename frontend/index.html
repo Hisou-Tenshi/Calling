@@ -92,6 +92,20 @@
               <input id="modelCustom" class="input" placeholder="Or type a custom model id" />
             </div>
 
+            <div class="field">
+              <label for="systemPrompt"><b>System prompt</b> <span class="muted">(always available)</span></label>
+              <textarea
+                id="systemPrompt"
+                rows="6"
+                placeholder="Set a system prompt that applies to this chat. Stored locally in your browser."
+                spellcheck="false"
+              ></textarea>
+              <div class="muted" style="margin-top:6px; line-height:1.35">
+                Persona templates (click to apply):
+              </div>
+              <div id="personaTemplates" class="template-grid" aria-label="Persona templates"></div>
+            </div>
+
             <div class="field toggles">
               <label class="check">
                 <input type="checkbox" id="ragToggle" checked />

@@ -453,6 +453,17 @@ textarea{
   margin: 12px 0;
 }
 label{ color: var(--muted); font-size: 12px; display:block; margin-bottom: 6px; }
+.template-grid{
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.btn.template-btn{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
 .input{
   width:100%;
   border: 1px solid var(--border);

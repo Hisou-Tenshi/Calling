@@ -347,6 +347,7 @@ def create_app() -> FastAPI:
         force_web_search = bool(payload.get("force_web_search"))
         uploaded_files = payload.get("uploaded_files") or []
         continue_from = (payload.get("continue_from") or "").strip()
+        user_system_prompt = (payload.get("system_prompt") or "").strip()
 
         if not isinstance(messages, list) or not messages:
             raise HTTPException(status_code=400, detail="messages must be a non-empty list")
@@ -412,6 +413,8 @@ def create_app() -> FastAPI:
                 rag_context = "\n\n".join(parts)
 
         system_prompt = build_system_prompt(force_web_search=force_web_search, rag_enabled=rag_enabled)
+        if user_system_prompt:
+            system_prompt += f"\n\n{user_system_prompt}"
         if rag_enabled and rag_context.strip():
             system_prompt += f"\n\nRAG_CONTEXT:\n{rag_context}"
 

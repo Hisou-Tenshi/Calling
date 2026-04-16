@@ -60,6 +60,9 @@ const uploadListEl = $("#uploadList");
 const newConvBtn = $("#newConvBtn");
 const convListEl = $("#convList");
 
+const systemPromptEl = $("#systemPrompt");
+const personaTemplatesEl = $("#personaTemplates");
+
 let conversationId = null;
 let messages = []; // [{role:'user'|'assistant', content:string}]
 let uploadedFiles = []; // ["data/uploads/xxx"]
@@ -69,6 +72,89 @@ let chatAbortController = null;
 
 let authedUser = null;
 let trialOnly = false;
+
+const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
+
+// Draft persona templates. You can edit the prompt texts later.
+const PERSONA_TEMPLATES = [
+  {
+    id: "default-helpful",
+    title: "默认·严谨助理",
+    prompt: [
+      "你是一个严谨、可靠的助手。",
+      "优先给出结论，其次给出必要的推理与步骤。",
+      "遇到不确定的信息要明确标注不确定，并给出可验证的下一步。",
+    ].join("\n"),
+  },
+  {
+    id: "senior-dev",
+    title: "资深工程师",
+    prompt: [
+      "你是资深软件工程师。",
+      "输出偏工程落地：先给可执行方案，再给关键代码/命令，再给验证步骤。",
+      "默认考虑边界条件、错误处理与可维护性。",
+    ].join("\n"),
+  },
+  {
+    id: "teacher",
+    title: "讲师·循序渐进",
+    prompt: [
+      "你是耐心的讲师。",
+      "用循序渐进的方式解释概念，配合小例子。",
+      "尽量避免跳步；如果需要前置知识，先补齐再继续。",
+    ].join("\n"),
+  },
+  {
+    id: "translator",
+    title: "双语翻译",
+    prompt: [
+      "你是专业的中英双语翻译与润色助手。",
+      "保持术语一致；必要时给出多个译法并说明取舍。",
+      "对专业内容优先准确，其次自然。",
+    ].join("\n"),
+  },
+];
+
+function safeLocalStorageGet(key, fallback = "") {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
+function initSystemPromptUI() {
+  if (systemPromptEl) {
+    const saved = safeLocalStorageGet("calling_system_prompt", "");
+    if (saved && !systemPromptEl.value) systemPromptEl.value = saved;
+    systemPromptEl.addEventListener("input", () => {
+      safeLocalStorageSet("calling_system_prompt", systemPromptEl.value || "");
+    });
+  }
+
+  if (personaTemplatesEl) {
+    personaTemplatesEl.innerHTML = "";
+    for (const t of PERSONA_TEMPLATES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn template-btn";
+      btn.textContent = t.title;
+      btn.addEventListener("click", () => {
+        if (!systemPromptEl) return;
+        systemPromptEl.value = t.prompt || "";
+        safeLocalStorageSet("calling_system_prompt", systemPromptEl.value || "");
+        setStatus(`Applied system prompt template: ${t.title}`);
+      });
+      personaTemplatesEl.appendChild(btn);
+    }
+  }
+}
 
 function setStatus(text) {
   statusEl.textContent = text || "";
@@ -286,18 +372,24 @@ function renderMessages() {
     if (m.role === "assistant") {
       const actions = document.createElement("div");
       actions.className = "msg-actions";
-      actions.innerHTML = `
-        <button type="button" class="btn msg-action" data-act="copy-md">复制MD</button>
-        <button type="button" class="btn msg-action" data-act="copy-plain">复制文本</button>
-        <button type="button" class="btn msg-action" data-act="retry">重试</button>
-        <button type="button" class="btn msg-action" data-act="retry-remodel">更换模型重试</button>
-        <button type="button" class="btn msg-action" data-act="retry-verbose">详尽一点</button>
-        <button type="button" class="btn msg-action" data-act="retry-brief">简短一点</button>
-        <button type="button" class="btn msg-action" data-act="retry-structured">更格式化</button>
-        <button type="button" class="btn msg-action" data-act="retry-natural">更自然语言</button>
-        <button type="button" class="btn msg-action" data-act="edit-fork">修改并Fork</button>
-        ${m.interrupted ? '<button type="button" class="btn msg-action primary" data-act="continue">继续输出</button>' : ""}
-      `;
+      if (m.failed) {
+        actions.innerHTML = `
+          <button type="button" class="btn msg-action" data-act="retry">重试</button>
+        `;
+      } else {
+        actions.innerHTML = `
+          <button type="button" class="btn msg-action" data-act="copy-md">复制MD</button>
+          <button type="button" class="btn msg-action" data-act="copy-plain">复制文本</button>
+          <button type="button" class="btn msg-action" data-act="retry">重试</button>
+          <button type="button" class="btn msg-action" data-act="retry-remodel">更换模型重试</button>
+          <button type="button" class="btn msg-action" data-act="retry-verbose">详尽一点</button>
+          <button type="button" class="btn msg-action" data-act="retry-brief">简短一点</button>
+          <button type="button" class="btn msg-action" data-act="retry-structured">更格式化</button>
+          <button type="button" class="btn msg-action" data-act="retry-natural">更自然语言</button>
+          <button type="button" class="btn msg-action" data-act="edit-fork">修改并Fork</button>
+          ${m.interrupted ? '<button type="button" class="btn msg-action primary" data-act="continue">继续输出</button>' : ""}
+        `;
+      }
       div.appendChild(actions);
     }
     messagesEl.appendChild(div);
@@ -554,6 +646,8 @@ async function sendMessage(opts = {}) {
     force_web_search,
     uploaded_files: uploadedFiles,
   };
+  const system_prompt = (systemPromptEl && systemPromptEl.value) ? String(systemPromptEl.value || "") : "";
+  if (system_prompt.trim()) body.system_prompt = system_prompt;
   if (opts.continueFrom) body.continue_from = opts.continueFrom;
 
   setStatus("Waiting for assistant...");
@@ -561,9 +655,15 @@ async function sendMessage(opts = {}) {
   if (stopBtn) stopBtn.style.display = "";
   chatBusy = true;
   chatAbortController = new AbortController();
+  let timeoutHandle = null;
+  let abortedByTimeout = false;
+  timeoutHandle = setTimeout(() => {
+    abortedByTimeout = true;
+    try { chatAbortController && chatAbortController.abort(); } catch {}
+  }, CHAT_TIMEOUT_MS);
   try {
     // Pre-insert an assistant placeholder and stream into it.
-    const assistantMsg = { role: "assistant", content: "", model, thinking: "" };
+    const assistantMsg = { role: "assistant", content: "", model, thinking: "", failed: false };
     messages = sourceMessages.slice();
     messages.push(assistantMsg);
     renderMessages();
@@ -625,6 +725,7 @@ async function sendMessage(opts = {}) {
     assistantMsg.content = donePayload.assistant || assistantMsg.content || "";
     assistantMsg.thinking = donePayload.thinking || assistantMsg.thinking || "";
     assistantMsg.interrupted = false;
+    assistantMsg.failed = false;
     renderMessages();
 
     if (forceSearchToggle.checked && donePayload.web_search_called) {
@@ -637,21 +738,45 @@ async function sendMessage(opts = {}) {
     await refreshConversationList();
   } catch (e) {
     if (e?.name === "AbortError") {
-      const lastAborted = messages[messages.length - 1];
-      if (lastAborted && lastAborted.role === "assistant" && (lastAborted.content || "").trim()) {
-        lastAborted.interrupted = true;
+      if (abortedByTimeout) {
+        const last = messages[messages.length - 1];
+        if (last && last.role === "assistant") {
+          last.failed = true;
+          last.interrupted = false;
+          if (!(last.content || "").trim()) {
+            last.content = "（请求超时：10 分钟未完成。你可以点击“重试”。）";
+          } else {
+            last.content += "\n\n（请求超时：10 分钟未完成。你可以点击“重试”。）";
+          }
+        }
+        renderMessages();
+        setStatus("Timed out after 10 minutes.");
+        return;
+      } else {
+        const lastAborted = messages[messages.length - 1];
+        if (lastAborted && lastAborted.role === "assistant" && (lastAborted.content || "").trim()) {
+          lastAborted.interrupted = true;
+        }
+        renderMessages();
+        setStatus("Output interrupted.");
+        return;
       }
-      renderMessages();
-      setStatus("Output interrupted.");
-      return;
     }
     const last = messages[messages.length - 1];
-    if (last && last.role === "assistant" && !last.content) {
-      messages.pop();
+    const errText = String(e?.message || e);
+    if (last && last.role === "assistant") {
+      last.failed = true;
+      last.interrupted = false;
+      if (!(last.content || "").trim()) {
+        last.content = `（请求失败：${errText}）`;
+      } else {
+        last.content += `\n\n（请求失败：${errText}）`;
+      }
       renderMessages();
     }
-    setStatus(String(e?.message || e));
+    setStatus(errText);
   } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
     sendBtn.disabled = false;
     if (stopBtn) stopBtn.style.display = "none";
     chatAbortController = null;
@@ -870,6 +995,7 @@ async function deleteConversation(cid) {
 
 renderMessages();
 renderUploadsFromPaths([]);
+initSystemPromptUI();
 boot();
 
 async function checkAuth() {
