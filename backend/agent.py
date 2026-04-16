@@ -6,6 +6,7 @@ from anthropic import Anthropic
 from google import genai
 from google.genai import types
 from openai import OpenAI
+from openai import APIStatusError, APIConnectionError, APITimeoutError
 
 from backend.tools import read_file_tool, web_search_tool
 
@@ -223,12 +224,28 @@ def call_openai_compat_with_tools(
     used_web_search = False
 
     for _ in range(max_tool_rounds):
-        resp = client.chat.completions.create(
-            model=model,
-            messages=model_messages,
-            tools=tools,
-            tool_choice="auto",
-        )
+        # Some OpenAI-compatible providers (or specific models, e.g. GLM behind gateways)
+        # do not fully support tool/function calling and may return 5xx.
+        # Try with tools first, then gracefully fall back to plain chat.
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=model_messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+        except APIStatusError as e:
+            status = getattr(e, "status_code", None)
+            if status and int(status) >= 500:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=model_messages,
+                )
+            else:
+                raise
+        except (APIConnectionError, APITimeoutError):
+            # Network-layer issues: don't silently change behavior; bubble up.
+            raise
         msg = resp.choices[0].message
         tool_calls = getattr(msg, "tool_calls", None) or []
         if tool_calls:

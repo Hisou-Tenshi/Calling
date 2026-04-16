@@ -477,6 +477,12 @@ async function createNewConversation() {
 }
 
 async function ensureConversationSelected() {
+  // Trial mode: conversation management APIs are auth-protected on purpose.
+  // We still allow chatting, so use a deterministic local conversation id.
+  if (trialOnly) {
+    if (!conversationId) conversationId = "trial:" + CALLING_DEVICE_ID;
+    return;
+  }
   if (conversationId) return;
   await refreshConversationList();
   if (!conversationsCache || conversationsCache.length === 0) {
