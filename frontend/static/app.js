@@ -1,5 +1,38 @@
 const $ = (sel) => document.querySelector(sel);
 
+// ============================================================
+// Auth bootstrap + device binding
+// ============================================================
+function ensureDeviceId() {
+  const key = "calling_device_id";
+  let v = "";
+  try { v = localStorage.getItem(key) || ""; } catch {}
+  if (!v) {
+    v = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    try { localStorage.setItem(key, v); } catch {}
+  }
+  return v;
+}
+
+const CALLING_DEVICE_ID = ensureDeviceId();
+
+// Patch fetch for same-origin /api/* so cookies + device header are always included.
+(() => {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    try {
+      const url = typeof input === "string" ? input : (input && input.url) ? input.url : "";
+      if (typeof url === "string" && url.startsWith("/api/")) {
+        const next = init ? { ...init } : {};
+        next.credentials = "include";
+        next.headers = { ...(next.headers || {}), "x-calling-device": CALLING_DEVICE_ID };
+        return _fetch(input, next);
+      }
+    } catch {}
+    return _fetch(input, init);
+  };
+})();
+
 const messagesEl = $("#messages");
 const chatForm = $("#chatForm");
 const promptEl = $("#prompt");
@@ -7,6 +40,11 @@ const sendBtn = $("#sendBtn");
 const stopBtn = $("#stopBtn");
 const clearBtn = $("#clearBtn");
 const statusEl = $("#status");
+
+const authStatusEl = $("#authStatus");
+const authLoginGithubBtn = $("#authLoginGithub");
+const authLoginPasswordBtn = $("#authLoginPassword");
+const authLogoutBtn = $("#authLogout");
 
 const modelSelect = $("#modelSelect");
 const modelCustom = $("#modelCustom");
@@ -26,8 +64,14 @@ let conversationsCache = [];
 let chatBusy = false;
 let chatAbortController = null;
 
+let authedUser = null;
+
 function setStatus(text) {
   statusEl.textContent = text || "";
+}
+
+function setAuthStatus(text) {
+  if (authStatusEl) authStatusEl.textContent = text || "";
 }
 
 function escapeHtml(text) {
@@ -792,10 +836,80 @@ async function deleteConversation(cid) {
   }
 }
 
-loadModels();
 renderMessages();
 renderUploadsFromPaths([]);
-refreshConversationList();
+boot();
+
+async function checkAuth() {
+  try {
+    const res = await fetch("/api/auth/me");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "unauthorized");
+    authedUser = data || {};
+    const who = authedUser.login ? `@${authedUser.login}` : (authedUser.user_id || "user");
+    setAuthStatus(`Authed: ${who} (${authedUser.method || "session"})`);
+    if (authLogoutBtn) authLogoutBtn.style.display = "";
+    if (authLoginGithubBtn) authLoginGithubBtn.style.display = "none";
+    if (authLoginPasswordBtn) authLoginPasswordBtn.style.display = "none";
+    return true;
+  } catch {
+    authedUser = null;
+    setAuthStatus("Not logged in.");
+    if (authLogoutBtn) authLogoutBtn.style.display = "none";
+    if (authLoginGithubBtn) authLoginGithubBtn.style.display = "";
+    if (authLoginPasswordBtn) authLoginPasswordBtn.style.display = "";
+    return false;
+  }
+}
+
+async function boot() {
+  const ok = await checkAuth();
+  if (!ok) {
+    // Leave UI visible but avoid hammering protected APIs.
+    setStatus("Please login to use the API.");
+    return;
+  }
+  await loadModels();
+  renderMessages();
+  renderUploadsFromPaths([]);
+  await refreshConversationList();
+}
+
+if (authLoginGithubBtn) {
+  authLoginGithubBtn.addEventListener("click", () => {
+    window.location.href = "/api/auth/github/start";
+  });
+}
+if (authLoginPasswordBtn) {
+  authLoginPasswordBtn.addEventListener("click", async () => {
+    const pw = window.prompt("Password");
+    if (pw == null) return;
+    try {
+      const res = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pw }),
+      });
+      // cookie is set via Set-Cookie even if the response is redirected
+      if (res.ok || res.redirected) {
+        window.location.reload();
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setAuthStatus(data.detail || "Password login failed.");
+    } catch (e) {
+      setAuthStatus(String(e?.message || e));
+    }
+  });
+}
+if (authLogoutBtn) {
+  authLogoutBtn.addEventListener("click", () => {
+    window.location.href = "/api/auth/logout";
+  });
+}
+
+// Replace eager startup with auth-aware boot.
+// (The original loadModels()/refreshConversationList() calls above are now gated.)
 
 // ============================================================
 // Tab switching
@@ -907,7 +1021,8 @@ function trEnableOutputBtns() {
 }
 
 function trDisableOutputBtns() {
-  trDisableOutputBtns();
+  trCopyBtn.disabled = true;
+  trDownloadBtn.disabled = true;
   trDownloadTexBtn.disabled = true;
   trDownloadPdfBtn.disabled = true;
 }

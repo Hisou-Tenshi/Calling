@@ -10,7 +10,7 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from backend.config import load_settings
 from backend.agent import make_tool_exec, route_and_chat
@@ -20,6 +20,14 @@ from backend.rag_store import RagStore
 from backend.util import chunk_text, ensure_dir
 from backend.conversation_store import ConversationStore
 from backend.translate import translate_document, SEPARATOR_PRESETS
+from backend.auth import (
+    github_oauth_callback,
+    github_oauth_start,
+    logout_response,
+    password_login,
+    require_auth,
+)
+from backend.rate_limit import InMemorySlidingWindow, UpstashFixedWindow
 
 
 class _BroadcastHandler(logging.Handler):
@@ -180,6 +188,74 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Calling - Minimal Agent")
 
+    # ----------------------------
+    # Auth + Rate limit guard (protect /api/*)
+    # ----------------------------
+    mem_rl = InMemorySlidingWindow()
+    upstash_rl = None
+    if settings.upstash_redis_rest_url and settings.upstash_redis_rest_token:
+        upstash_rl = UpstashFixedWindow(
+            rest_url=settings.upstash_redis_rest_url,
+            rest_token=settings.upstash_redis_rest_token,
+        )
+
+    def _rl_allow(key: str, limit: int, window_seconds: int = 60):
+        if upstash_rl is not None:
+            return upstash_rl.allow(key, limit=limit, window_seconds=window_seconds)
+        return mem_rl.allow(key, limit=limit, window_seconds=window_seconds)
+
+    @app.middleware("http")
+    async def _auth_and_rate_limit(request: Request, call_next):
+        path = request.url.path or ""
+        if not path.startswith("/api/"):
+            return await call_next(request)
+
+        # allow CORS preflight
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # public endpoints
+        if path in ("/api/health",):
+            return await call_next(request)
+        if path.startswith("/api/auth/"):
+            # basic IP limiter for auth endpoints
+            ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or "unknown"
+            d = _rl_allow(f"rl:auth:ip:{ip}", limit=max(10, settings.rate_limit_per_ip_per_min // 3))
+            if not d.allowed:
+                return JSONResponse(
+                    {"detail": "Too many auth attempts. Please wait."},
+                    status_code=429,
+                    headers={"Retry-After": str(d.reset_in_seconds or 60)},
+                )
+            return await call_next(request)
+
+        # everything else under /api requires auth
+        try:
+            ar = require_auth(request, settings=settings)
+        except HTTPException as e:
+            return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+
+        ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or "unknown"
+        uid = ar.user_id or "user"
+
+        d_ip = _rl_allow(f"rl:ip:{ip}", limit=max(5, int(settings.rate_limit_per_ip_per_min)))
+        if not d_ip.allowed:
+            return JSONResponse(
+                {"detail": "Rate limited (ip)."},
+                status_code=429,
+                headers={"Retry-After": str(d_ip.reset_in_seconds or 60)},
+            )
+
+        d_u = _rl_allow(f"rl:user:{uid}", limit=max(5, int(settings.rate_limit_per_user_per_min)))
+        if not d_u.allowed:
+            return JSONResponse(
+                {"detail": "Rate limited (user)."},
+                status_code=429,
+                headers={"Retry-After": str(d_u.reset_in_seconds or 60)},
+            )
+
+        return await call_next(request)
+
     # Static GUI (serve / as index.html; serve /static/* for assets)
     if StaticFiles is not None:
         frontend_dir = os.path.join(project_root, "frontend")
@@ -195,6 +271,38 @@ def create_app() -> FastAPI:
                 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     tool_exec = make_tool_exec(project_root)
+
+    @app.get("/api/health")
+    def api_health():
+        return {"ok": True}
+
+    # ----------------------------
+    # Auth endpoints (cookie sessions)
+    # ----------------------------
+    @app.get("/api/auth/me")
+    def api_auth_me(request: Request):
+        ar = require_auth(request, settings=settings)
+        return {"ok": True, "user_id": ar.user_id, "login": ar.user_login, "method": ar.method}
+
+    @app.get("/api/auth/logout")
+    def api_auth_logout(request: Request):
+        return logout_response(request)
+
+    @app.post("/api/auth/password")
+    async def api_auth_password(request: Request, payload: dict[str, Any] | None = None):
+        if payload is None:
+            payload = {}
+        pw = (payload.get("password") or "").strip()
+        device = (request.headers.get("x-calling-device") or "").strip() or None
+        return password_login(request, settings=settings, password=pw, device=device)
+
+    @app.get("/api/auth/github/start")
+    def api_auth_github_start(request: Request):
+        return github_oauth_start(request, settings=settings)
+
+    @app.get("/api/auth/github/callback")
+    def api_auth_github_callback(request: Request):
+        return github_oauth_callback(request, settings=settings)
 
     def _run_chat(payload: dict[str, Any]) -> dict[str, Any]:
         model = payload.get("model") or settings.default_chat_model

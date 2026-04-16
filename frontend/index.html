@@ -16,6 +16,12 @@
             <div class="subtitle">Local LLM chat with tools + optional RAG</div>
           </div>
         </div>
+        <div class="authbar">
+          <div id="authStatus" class="auth-status">Checking auth...</div>
+          <button type="button" id="authLoginGithub" class="btn" style="display:none">Login with GitHub</button>
+          <button type="button" id="authLoginPassword" class="btn" style="display:none">Login with Password</button>
+          <button type="button" id="authLogout" class="btn" style="display:none">Logout</button>
+        </div>
         <nav class="tabs" role="tablist">
           <button class="tab active" data-tab="chat" role="tab" aria-selected="true">Chat</button>
           <button class="tab" data-tab="translate" role="tab" aria-selected="false">Translate</button>
