@@ -33,6 +33,13 @@ class Settings:
     web_search_max_results: int
 
     # ----------------------------
+    # OpenAI-compatible gateway (e.g., OpenRouter/Glama) + trial model
+    # ----------------------------
+    openai_compat_api_key: str | None
+    openai_compat_base_url: str | None
+    trial_model: str
+
+    # ----------------------------
     # Auth / Anti-abuse (Vercel-friendly)
     # ----------------------------
     # Modes: none | apikey | password | github
@@ -108,6 +115,10 @@ def load_settings() -> Settings:
         rag_chunk_overlap=int(os.getenv("RAG_CHUNK_OVERLAP") or 150),
         rag_top_k=int(os.getenv("RAG_TOP_K") or 5),
         web_search_max_results=int(os.getenv("WEB_SEARCH_MAX_RESULTS") or 5),
+
+        openai_compat_api_key=(os.getenv("OPENAI_COMPAT_API_KEY") or None),
+        openai_compat_base_url=(os.getenv("OPENAI_COMPAT_BASE_URL") or None),
+        trial_model=(os.getenv("CALLING_TRIAL_MODEL") or "glm-4.7-flash").strip(),
 
         auth_mode=(os.getenv("CALLING_AUTH_MODE") or "none").strip().lower(),
         auth_secret=(os.getenv("CALLING_AUTH_SECRET") or None),

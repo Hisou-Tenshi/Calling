@@ -10,7 +10,7 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from backend.config import load_settings
 from backend.agent import make_tool_exec, route_and_chat
@@ -25,9 +25,11 @@ from backend.auth import (
     github_oauth_start,
     logout_response,
     password_login,
+    authenticate_request,
     require_auth,
 )
 from backend.rate_limit import InMemorySlidingWindow, UpstashFixedWindow
+from backend.security import get_request_ip
 
 
 class _BroadcastHandler(logging.Handler):
@@ -229,14 +231,36 @@ def create_app() -> FastAPI:
                 )
             return await call_next(request)
 
-        # everything else under /api requires auth
-        try:
-            ar = require_auth(request, settings=settings)
-        except HTTPException as e:
-            return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+        # Trial endpoints: allow unauthenticated access with strict limits
+        trial_paths = ("/api/models", "/api/chat", "/api/chat/stream")
+        auth_mode = (settings.auth_mode or "none").strip().lower()
+        ip = get_request_ip(dict(request.headers), fallback="unknown")
 
-        ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or "unknown"
-        uid = ar.user_id or "user"
+        ar = authenticate_request(request, settings=settings)
+        authed = bool(ar.ok)
+        request.state.authed = authed
+        request.state.trial = False
+
+        if auth_mode != "none" and (not authed) and path in trial_paths:
+            request.state.trial = True
+            # very strict per-ip limiter for trial
+            d_trial = _rl_allow(f"rl:trial:ip:{ip}", limit=max(3, int(settings.rate_limit_per_ip_per_min // 6)))
+            if not d_trial.allowed:
+                return JSONResponse(
+                    {"detail": "Rate limited (trial)."},
+                    status_code=429,
+                    headers={"Retry-After": str(d_trial.reset_in_seconds or 60)},
+                )
+            return await call_next(request)
+
+        # everything else under /api requires auth (when auth enabled)
+        if auth_mode != "none":
+            try:
+                ar = require_auth(request, settings=settings)
+            except HTTPException as e:
+                return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+
+        uid = (ar.user_id or "user") if authed else "anon"
 
         d_ip = _rl_allow(f"rl:ip:{ip}", limit=max(5, int(settings.rate_limit_per_ip_per_min)))
         if not d_ip.allowed:
@@ -263,9 +287,82 @@ def create_app() -> FastAPI:
         if os.path.exists(frontend_dir):
             index_path = os.path.join(frontend_dir, "index.html")
             if os.path.exists(index_path):
-                @app.get("/")
-                def api_index():
-                    return FileResponse(index_path)
+                @app.get("/", include_in_schema=False)
+                async def api_index(request: Request):
+                    if (settings.auth_mode or "none").strip().lower() == "none":
+                        return FileResponse(index_path)
+                    try:
+                        require_auth(request, settings=settings)
+                        return FileResponse(index_path)
+                    except HTTPException:
+                        # Minimal inline login page (no static assets required)
+                        html = """
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calling - Login</title>
+    <style>
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:#0b1220;color:#e5e7eb}
+      .wrap{max-width:720px;margin:60px auto;padding:0 18px}
+      .card{background:#111a2e;border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.25)}
+      h1{font-size:18px;margin:0 0 10px}
+      p{color:rgba(229,231,235,.75);line-height:1.6;margin:0 0 14px}
+      .row{display:flex;gap:10px;flex-wrap:wrap}
+      a.btn, button.btn{appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#e5e7eb;padding:10px 12px;border-radius:12px;text-decoration:none;cursor:pointer}
+      a.btn.primary, button.btn.primary{background:#2563eb;border-color:#2563eb}
+      input{width:100%;box-sizing:border-box;background:#0b1220;border:1px solid rgba(255,255,255,.14);color:#e5e7eb;border-radius:12px;padding:10px 12px}
+      .small{font-size:12px;color:rgba(229,231,235,.6);margin-top:10px}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Login required</h1>
+        <p>This Calling instance is protected. Please login to continue.</p>
+        <div class="row">
+          <a class="btn primary" href="/api/auth/github/start">Login with GitHub</a>
+          <a class="btn" href="/api/auth/logout">Logout</a>
+        </div>
+        <div style="height:14px"></div>
+        <form id="pwForm">
+          <input id="pw" type="password" placeholder="Password (if enabled)" />
+          <div style="height:10px"></div>
+          <button class="btn" type="submit">Login with Password</button>
+        </form>
+        <div class="small">If GitHub login is enabled, use the GitHub button. If password mode is enabled, enter your password.</div>
+      </div>
+    </div>
+    <script>
+      (function(){
+        const didKey = "calling_device_id";
+        let did = "";
+        try { did = localStorage.getItem(didKey) || ""; } catch {}
+        if (!did) {
+          did = "dev_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          try { localStorage.setItem(didKey, did); } catch {}
+        }
+        const form = document.getElementById("pwForm");
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const pw = (document.getElementById("pw").value || "").trim();
+          if (!pw) return;
+          const res = await fetch("/api/auth/password", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", "x-calling-device": did },
+            body: JSON.stringify({ password: pw })
+          });
+          if (res.ok || res.redirected) location.href = "/";
+          else alert("Login failed");
+        });
+      })();
+    </script>
+  </body>
+</html>
+"""
+                        return HTMLResponse(content=html, status_code=401)
 
             if os.path.exists(static_dir):
                 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -414,7 +511,11 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/models")
-    def api_models():
+    def api_models(request: Request):
+        # Trial mode: expose ONLY the free model
+        if getattr(request.state, "trial", False):
+            return {"default": settings.trial_model, "options": [settings.trial_model], "trial_only": True}
+
         claude_models = [
             "claude-opus-4-6-thinking",
             "claude-opus-4-6",
@@ -432,8 +533,9 @@ def create_app() -> FastAPI:
             "grok-4-1-fast-reasoning",
         ]
         # Keep it flat for UI: one selector can accept any supported model id.
-        options = sorted(set(claude_models + gemini_models + grok_models + [settings.default_chat_model]))
-        return {"default": settings.default_chat_model, "options": options}
+        options = sorted(set([settings.trial_model] + claude_models + gemini_models + grok_models + [settings.default_chat_model]))
+        # Default model: always trial model (safety against accidental paid calls)
+        return {"default": settings.trial_model, "options": options, "trial_only": False}
 
     @app.post("/api/conversations/new")
     def api_new_conversation():
@@ -547,8 +649,15 @@ def create_app() -> FastAPI:
         return {"uploaded": uploaded}
 
     @app.post("/api/chat")
-    async def api_chat(payload: dict[str, Any]):
+    async def api_chat(request: Request, payload: dict[str, Any]):
         try:
+            if getattr(request.state, "trial", False):
+                payload = dict(payload or {})
+                payload["model"] = settings.trial_model
+                payload["rag_enabled"] = False
+                payload["force_web_search"] = False
+                payload["uploaded_files"] = []
+                payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
             return JSONResponse(_run_chat(payload))
         except HTTPException as e:
             return JSONResponse({"detail": e.detail}, status_code=e.status_code)
@@ -556,8 +665,16 @@ def create_app() -> FastAPI:
             return JSONResponse({"detail": str(e)}, status_code=500)
 
     @app.post("/api/chat/stream")
-    async def api_chat_stream(payload: dict[str, Any]):
+    async def api_chat_stream(request: Request, payload: dict[str, Any]):
         import asyncio
+
+        if getattr(request.state, "trial", False):
+            payload = dict(payload or {})
+            payload["model"] = settings.trial_model
+            payload["rag_enabled"] = False
+            payload["force_web_search"] = False
+            payload["uploaded_files"] = []
+            payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
 
         def _sse(event: str, data: Any) -> str:
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"

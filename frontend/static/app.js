@@ -45,6 +45,9 @@ const authStatusEl = $("#authStatus");
 const authLoginGithubBtn = $("#authLoginGithub");
 const authLoginPasswordBtn = $("#authLoginPassword");
 const authLogoutBtn = $("#authLogout");
+const trialBannerEl = $("#trialBanner");
+const trialLoginGithubBtn = $("#trialLoginGithub");
+const trialLoginPasswordBtn = $("#trialLoginPassword");
 
 const modelSelect = $("#modelSelect");
 const modelCustom = $("#modelCustom");
@@ -65,6 +68,7 @@ let chatBusy = false;
 let chatAbortController = null;
 
 let authedUser = null;
+let trialOnly = false;
 
 function setStatus(text) {
   statusEl.textContent = text || "";
@@ -338,6 +342,7 @@ function renderUploadsFromPaths(paths) {
 }
 
 function getSelectedModel() {
+  if (trialOnly) return modelSelect.value || "";
   const custom = (modelCustom.value || "").trim();
   if (custom) return custom;
   return modelSelect.value || "";
@@ -349,6 +354,7 @@ async function loadModels() {
     if (!res.ok) throw new Error("Failed to fetch /api/models");
     const data = await res.json();
     const options = data.options || [];
+    trialOnly = !!data.trial_only;
     modelSelect.innerHTML = "";
     for (const opt of options) {
       const o = document.createElement("option");
@@ -360,6 +366,26 @@ async function loadModels() {
   } catch (e) {
     setStatus("Model list unavailable; you can still type a model id manually.");
   }
+}
+
+function setTrialUI(on) {
+  if (trialBannerEl) trialBannerEl.style.display = on ? "" : "none";
+  // Disable paid-risk features in trial
+  if (ragToggle) { ragToggle.checked = false; ragToggle.disabled = on; }
+  if (forceSearchToggle) { forceSearchToggle.checked = false; forceSearchToggle.disabled = on; }
+  if (fileInput) fileInput.disabled = on;
+  if (uploadBtn) uploadBtn.disabled = on;
+  if (newConvBtn) newConvBtn.disabled = on;
+  if (convListEl) convListEl.style.opacity = on ? "0.55" : "";
+
+  // Disable translate tab entry in trial mode
+  document.querySelectorAll('.tab').forEach(btn => {
+    if ((btn.dataset.tab || "") === "translate") {
+      btn.disabled = on;
+      btn.style.opacity = on ? "0.5" : "";
+      btn.title = on ? "Login required for Translate" : "";
+    }
+  });
 }
 
 function renderConversationList(conversations) {
@@ -851,10 +877,11 @@ async function checkAuth() {
     if (authLogoutBtn) authLogoutBtn.style.display = "";
     if (authLoginGithubBtn) authLoginGithubBtn.style.display = "none";
     if (authLoginPasswordBtn) authLoginPasswordBtn.style.display = "none";
+    setTrialUI(false);
     return true;
   } catch {
     authedUser = null;
-    setAuthStatus("Not logged in.");
+    setAuthStatus("Not logged in (trial).");
     if (authLogoutBtn) authLogoutBtn.style.display = "none";
     if (authLoginGithubBtn) authLoginGithubBtn.style.display = "";
     if (authLoginPasswordBtn) authLoginPasswordBtn.style.display = "";
@@ -864,14 +891,14 @@ async function checkAuth() {
 
 async function boot() {
   const ok = await checkAuth();
-  if (!ok) {
-    // Leave UI visible but avoid hammering protected APIs.
-    setStatus("Please login to use the API.");
-    return;
-  }
   await loadModels();
   renderMessages();
   renderUploadsFromPaths([]);
+  if (!ok) {
+    setTrialUI(true);
+    setStatus("Trial mode: only glm-4.7-flash is available. Login to unlock uploads/RAG/translate/conversations.");
+    return;
+  }
   await refreshConversationList();
 }
 
@@ -905,6 +932,17 @@ if (authLoginPasswordBtn) {
 if (authLogoutBtn) {
   authLogoutBtn.addEventListener("click", () => {
     window.location.href = "/api/auth/logout";
+  });
+}
+
+if (trialLoginGithubBtn) {
+  trialLoginGithubBtn.addEventListener("click", () => {
+    window.location.href = "/api/auth/github/start";
+  });
+}
+if (trialLoginPasswordBtn) {
+  trialLoginPasswordBtn.addEventListener("click", () => {
+    if (authLoginPasswordBtn) authLoginPasswordBtn.click();
   });
 }
 

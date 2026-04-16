@@ -27,6 +27,16 @@
           <button class="tab" data-tab="translate" role="tab" aria-selected="false">Translate</button>
         </nav>
       </header>
+      <div id="trialBanner" class="trial-banner" style="display:none">
+        <div class="trial-left">
+          <div class="trial-title">试用模式：未登录仅允许使用 <code>glm-4.7-flash</code></div>
+          <div class="trial-sub">上传 / RAG / 翻译 / 会话管理已禁用。登录后仍默认 <code>glm-4.7-flash</code>，避免误触付费模型。</div>
+        </div>
+        <div class="trial-actions">
+          <button type="button" id="trialLoginGithub" class="btn primary">Login with GitHub</button>
+          <button type="button" id="trialLoginPassword" class="btn">Login with Password</button>
+        </div>
+      </div>
 
       <!-- Chat tab -->
       <div id="tab-chat" class="tab-panel active">

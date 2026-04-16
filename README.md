@@ -148,7 +148,8 @@ Vercel → Project → Settings → Environment Variables。
 
 #### 3.1 模型 Key（至少填一个）
 
-- `CLAUDE_API_KEY` 或 `GEMINI_API_KEY` 或 `GROK_API_KEY`
+- `CLAUDE_API_KEY` 或 `GEMINI_API_KEY` 或 `GROK_API_KEY`  
+- 如果你要启用 **未登录试用 `glm-4.7-flash`**，还需要配置一个 OpenAI 兼容网关（见下）
 
 #### 3.2 开启强认证（推荐 GitHub OAuth）
 
@@ -181,6 +182,27 @@ GITHUB_ALLOWED_USERS=你的github用户名
 4. 创建后把 Client ID / Client Secret 填回 Vercel 环境变量
 
 > **重要**：为了安全，Calling 默认必须配置 `GITHUB_ALLOWED_USERS` 或 `GITHUB_ALLOWED_ORGS`，否则就算 OAuth 成功也会拒绝登录。
+
+#### 3.2.1 试用模式（未登录仅允许 glm-4.7-flash）
+
+当 `CALLING_AUTH_MODE != none` 时：
+
+- **未登录**：仍可打开界面并聊天，但后端会强制：
+  - 只能使用 `CALLING_TRIAL_MODEL`（默认 `glm-4.7-flash`）
+  - 禁用：上传 / RAG / 翻译 / 会话管理
+- **已登录**：默认模型仍是 `glm-4.7-flash`（避免误触 Claude 坑钱），你需要手动切模型才会用到其它模型
+
+要让 `glm-4.7-flash` 能调用成功，你需要一个 **OpenAI 兼容网关**（示例）：
+
+```env
+DEFAULT_CHAT_MODEL=glm-4.7-flash
+CALLING_TRIAL_MODEL=glm-4.7-flash
+
+OPENAI_COMPAT_BASE_URL=https://glama.ai/api/gateway/openai/v1
+OPENAI_COMPAT_API_KEY=你的key
+```
+
+你也可以用 OpenRouter（或任何 OpenAI 兼容的 provider），只要把 `BASE_URL` 和 `API_KEY` 换成对应值即可。
 
 #### 3.3（强烈推荐）接 Upstash Redis 做稳定限流
 

@@ -196,6 +196,74 @@ def call_grok_with_tools(
     }
 
 
+def call_openai_compat_with_tools(
+    *,
+    settings: Any,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, Any]],
+    tool_exec: dict[str, Callable[[dict[str, Any]], Any]],
+    force_web_search: bool,
+    max_tool_rounds: int = 8,
+) -> dict[str, Any]:
+    """
+    OpenAI-compatible gateway for models like GLM via providers such as OpenRouter/Glama.
+    Requires OPENAI_COMPAT_API_KEY and OPENAI_COMPAT_BASE_URL.
+    """
+    if not getattr(settings, "openai_compat_api_key", None) or not getattr(settings, "openai_compat_base_url", None):
+        raise RuntimeError("OPENAI_COMPAT_API_KEY / OPENAI_COMPAT_BASE_URL is not configured.")
+
+    client = OpenAI(api_key=settings.openai_compat_api_key, base_url=settings.openai_compat_base_url)
+
+    model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    for m in _build_provider_messages(messages):
+        model_messages.append({"role": m["role"], "content": m["content"]})
+
+    tools = openai_tools_schema(max_search_results=settings.web_search_max_results)
+    used_web_search = False
+
+    for _ in range(max_tool_rounds):
+        resp = client.chat.completions.create(
+            model=model,
+            messages=model_messages,
+            tools=tools,
+            tool_choice="auto",
+        )
+        msg = resp.choices[0].message
+        tool_calls = getattr(msg, "tool_calls", None) or []
+        if tool_calls:
+            tool_call_payloads = []
+            for tc in tool_calls:
+                fn = tc.function
+                args_str = fn.arguments or "{}"
+                tool_call_payloads.append(
+                    {"id": tc.id, "type": "function", "function": {"name": fn.name, "arguments": args_str}}
+                )
+                used_web_search = used_web_search or (fn.name == "web_search")
+            model_messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": tool_call_payloads})
+
+            for tc in tool_calls:
+                name = tc.function.name
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except Exception:
+                    args = {}
+                result = tool_exec.get(name, lambda _a: {"error": f"tool {name} not found"})(args)
+                model_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_as_content(result)})
+            continue
+
+        return {
+            "answer": msg.content or "",
+            "used_web_search": used_web_search,
+            "thinking": (getattr(msg, "reasoning_content", None) or ""),
+        }
+
+    return {
+        "answer": "I couldn't produce a final answer within the tool loop.",
+        "used_web_search": used_web_search,
+        "thinking": "",
+    }
+
 def call_claude_with_tools(
     *,
     settings: Any,
@@ -403,9 +471,11 @@ def route_and_chat(
         provider = "gemini"
     elif model.startswith("grok-"):
         provider = "grok"
+    elif model.startswith("glm-"):
+        provider = "openai_compat"
     else:
-        # Default to Grok if it looks like that; otherwise try Grok last.
-        provider = "grok"
+        # Fall back to OpenAI-compatible gateway when configured, otherwise Grok.
+        provider = "openai_compat" if getattr(settings, "openai_compat_base_url", None) else "grok"
 
     msgs = _build_provider_messages(messages)
     used_web_search_total = False
@@ -429,6 +499,16 @@ def route_and_chat(
                 messages=msgs,
                 tool_exec=tool_exec,
                 force_web_search=force_web_search,
+            )
+        elif provider == "openai_compat":
+            r = call_openai_compat_with_tools(
+                settings=settings,
+                model=model,
+                system_prompt=system_prompt,
+                messages=msgs,
+                tool_exec=tool_exec,
+                force_web_search=force_web_search,
+                max_tool_rounds=8,
             )
         elif provider == "claude":
             r = call_claude_with_tools(
