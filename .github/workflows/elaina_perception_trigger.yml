@@ -112,6 +112,7 @@ jobs:
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
+          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

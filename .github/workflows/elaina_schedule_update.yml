@@ -49,6 +49,7 @@ jobs:
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
+          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
           LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
           DAILY_SUMMARY_CUTOFF_HOUR: "4"
           DAILY_SUMMARY_SILENCE_THRESHOLD_SECONDS: "10800"

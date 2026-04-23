@@ -121,6 +121,7 @@ jobs:
           MSG_DATE: ${{ github.event.client_payload.date }}
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
+          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
