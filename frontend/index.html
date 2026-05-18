@@ -50,6 +50,11 @@
             </div>
             <div class="conv-body">
               <button type="button" id="newConvBtn" class="btn primary">New chat</button>
+              <div class="conv-actions">
+                <button type="button" id="exportConvBtn" class="btn" title="Export conversations as JSON">Export</button>
+                <button type="button" id="importConvBtn" class="btn" title="Import conversations from JSON">Import</button>
+                <input type="file" id="importConvInput" accept=".json,application/json" hidden />
+              </div>
               <div id="convList" class="conv-list" aria-label="Conversation list"></div>
             </div>
           </aside>

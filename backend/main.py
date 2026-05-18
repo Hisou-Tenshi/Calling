@@ -594,6 +594,35 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="conversation not found")
         return {"deleted": True, "conversation_id": conversation_id}
 
+    @app.get("/api/conversations/export")
+    def api_export_conversations(request: Request, conversation_id: str = ""):
+        owner = _conversation_owner(request)
+        cid = (conversation_id or "").strip()
+        ids = [cid] if cid else None
+        try:
+            bundle = conversation_store.export_bundle(owner, conversation_ids=ids)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        return bundle
+
+    @app.post("/api/conversations/import")
+    def api_import_conversations(request: Request, payload: dict[str, Any]):
+        owner = _conversation_owner(request)
+        mode = (payload.get("mode") or "merge").strip()
+        bundle = payload.get("bundle")
+        if not isinstance(bundle, dict):
+            if isinstance(payload.get("conversations"), list):
+                bundle = payload
+            else:
+                raise HTTPException(status_code=400, detail="bundle must be an object")
+        try:
+            result = conversation_store.import_bundle(bundle, owner, mode=mode)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        return result
+
     @app.post("/api/conversations/fork")
     def api_fork_conversation(request: Request, payload: dict[str, Any]):
         owner = _conversation_owner(request)

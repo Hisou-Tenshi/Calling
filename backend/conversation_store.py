@@ -318,3 +318,96 @@ class ConversationStore:
             self._commit_owner(owner, data)
             return True
         return False
+
+    def export_bundle(
+        self,
+        owner: str | None = None,
+        *,
+        conversation_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        owner_norm = (owner or "local").strip() or "local"
+        data = self._owner_data(owner)
+        items: list[dict[str, Any]] = []
+        wanted = set(conversation_ids or [])
+        for conv in data.values():
+            if wanted and conv.conversation_id not in wanted:
+                continue
+            items.append(
+                {
+                    "conversation_id": conv.conversation_id,
+                    "title": conv.title,
+                    "updated_at": conv.updated_at,
+                    "messages": list(conv.messages),
+                    "uploaded_files": list(conv.uploaded_files),
+                    "owner": conv.owner,
+                }
+            )
+        items.sort(key=lambda x: float(x.get("updated_at") or 0.0), reverse=True)
+        return {
+            "format": "calling-conversations",
+            "version": 1,
+            "exported_at": time.time(),
+            "owner": owner_norm,
+            "conversations": items,
+        }
+
+    def import_bundle(
+        self,
+        bundle: dict[str, Any],
+        owner: str | None = None,
+        *,
+        mode: str = "merge",
+    ) -> dict[str, Any]:
+        owner_norm = (owner or "local").strip() or "local"
+        mode_norm = (mode or "merge").strip().lower()
+        if mode_norm not in ("merge", "replace", "import_as_new"):
+            raise ValueError("mode must be merge, replace, or import_as_new")
+
+        raw_items = bundle.get("conversations")
+        if not isinstance(raw_items, list):
+            raise ValueError("conversations must be a list")
+
+        data = self._owner_data(owner)
+        if mode_norm == "replace":
+            data = {}
+
+        imported = 0
+        skipped = 0
+        id_map: dict[str, str] = {}
+
+        for item in raw_items:
+            if not isinstance(item, dict):
+                skipped += 1
+                continue
+            src_id = str(item.get("conversation_id") or "").strip()
+            messages = _normalize_messages(item.get("messages"))
+            uploaded_files = list(item.get("uploaded_files") or [])
+            title = str(item.get("title") or "Imported chat")
+            updated_at = float(item.get("updated_at") or time.time())
+
+            if mode_norm == "import_as_new" or not src_id:
+                cid = uuid.uuid4().hex
+            else:
+                cid = src_id
+
+            conv = Conversation(
+                conversation_id=cid,
+                title=title,
+                updated_at=updated_at,
+                messages=messages,
+                uploaded_files=uploaded_files,
+                owner=owner_norm,
+            )
+            conv.title = _auto_title(conv.messages, conv.title)
+            data[cid] = conv
+            if src_id:
+                id_map[src_id] = cid
+            imported += 1
+
+        self._commit_owner(owner, data)
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "mode": mode_norm,
+            "id_map": id_map,
+        }

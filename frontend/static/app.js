@@ -59,6 +59,9 @@ const uploadListEl = $("#uploadList");
 
 const newConvBtn = $("#newConvBtn");
 const convListEl = $("#convList");
+const exportConvBtn = $("#exportConvBtn");
+const importConvBtn = $("#importConvBtn");
+const importConvInput = $("#importConvInput");
 
 const systemPromptEl = $("#systemPrompt");
 const personaSeriousSelectEl = $("#personaSeriousSelect");
@@ -238,6 +241,29 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
+/** Code block body: escape only HTML specials; keep *, #, _, etc. literal. */
+function escapeCodeContent(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Only a standalone fence line opens/closes a code block (not inline backticks). */
+function isCodeFenceLine(line) {
+  return /^(`{3,})([A-Za-z0-9_+#-]*)?\s*$/.test(String(line || "").trim());
+}
+
+/** While streaming, treat trailing unclosed ``` as still inside the code block. */
+function closeOpenCodeFence(mdText) {
+  const lines = String(mdText || "").split(/\r?\n/);
+  let open = false;
+  for (const line of lines) {
+    if (isCodeFenceLine(line)) open = !open;
+  }
+  return open ? `${mdText}\n\`\`\`` : mdText;
+}
+
 function renderInlineMarkdown(src) {
   let out = escapeHtml(src || "");
   out = out.replace(/`([^`\n]+)`/g, "<code>$1</code>");
@@ -251,7 +277,7 @@ function renderCodeLines(lines) {
   return lines
     .map((line, idx) => {
       const cls = idx % 2 === 0 ? "code-line blue" : "code-line pink";
-      const body = line.length ? escapeHtml(line) : "&nbsp;";
+      const body = line.length ? escapeCodeContent(line) : "&nbsp;";
       return `<span class="${cls}">${body}</span>`;
     })
     .join("");
@@ -263,8 +289,9 @@ function renderUserTextLines(lines) {
     .join("");
 }
 
-function renderMarkdownToHtml(mdText) {
-  const text = String(mdText || "");
+function renderMarkdownToHtml(mdText, opts = {}) {
+  const raw = String(mdText || "");
+  const text = opts.allowIncompleteFence ? closeOpenCodeFence(raw) : raw;
   const lines = text.split(/\r?\n/);
   const html = [];
   let i = 0;
@@ -285,13 +312,13 @@ function renderMarkdownToHtml(mdText) {
       continue;
     }
 
-    const codeFence = trimmed.match(/^```(\w+)?$/);
-    if (codeFence) {
+    if (isCodeFenceLine(line)) {
       flushPara();
-      const lang = codeFence[1] || "";
+      const fenceMatch = trimmed.match(/^(`{3,})([A-Za-z0-9_+#-]*)?/);
+      const lang = (fenceMatch && fenceMatch[2]) || "";
       i += 1;
       const buf = [];
-      while (i < lines.length && !String(lines[i] || "").trim().startsWith("```")) {
+      while (i < lines.length && !isCodeFenceLine(lines[i])) {
         buf.push(lines[i] || "");
         i += 1;
       }
@@ -419,7 +446,9 @@ function updateStreamingAssistantView() {
   if (!wrap) return;
   const msg = messages[streamingAssistantIndex] || {};
   const content = wrap.querySelector(".msg-content");
-  if (content) content.innerHTML = renderMarkdownToHtml(msg.content || "");
+  if (content) {
+    content.innerHTML = renderMarkdownToHtml(msg.content || "", { allowIncompleteFence: true });
+  }
   if ((msg.thinking || "").trim()) {
     let thinkingWrap = wrap.querySelector(".msg-thinking-wrap");
     if (!thinkingWrap) {
@@ -1088,6 +1117,24 @@ newConvBtn.addEventListener("click", async () => {
   await createNewConversation();
 });
 
+if (exportConvBtn) {
+  exportConvBtn.addEventListener("click", async () => {
+    await exportConversations();
+  });
+}
+
+if (importConvBtn && importConvInput) {
+  importConvBtn.addEventListener("click", () => {
+    importConvInput.value = "";
+    importConvInput.click();
+  });
+  importConvInput.addEventListener("change", async () => {
+    const file = importConvInput.files && importConvInput.files[0];
+    await importConversationsFromFile(file);
+    importConvInput.value = "";
+  });
+}
+
 clearBtn.addEventListener("click", async () => {
   if (conversationId && isCurrentConversationEmpty()) {
     setStatus("Already empty. Clear does nothing.");
@@ -1099,6 +1146,89 @@ clearBtn.addEventListener("click", async () => {
 uploadBtn.addEventListener("click", async () => {
   await uploadFiles();
 });
+
+function downloadJsonFile(obj, filename) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportConversations() {
+  const hasCurrent = conversationId && (messages.length > 0 || uploadedFiles.length > 0);
+  let scope = "all";
+  if (hasCurrent) {
+    const pick = window.prompt("导出范围：输入 current 仅当前会话，all 导出全部", "current");
+    if (pick == null) return;
+    scope = String(pick).trim().toLowerCase() === "all" ? "all" : "current";
+  }
+  try {
+    const url = scope === "current" && conversationId
+      ? `/api/conversations/export?conversation_id=${encodeURIComponent(conversationId)}`
+      : "/api/conversations/export";
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Export failed");
+    const stamp = new Date().toISOString().slice(0, 10);
+    const suffix = scope === "current" ? "single" : "all";
+    downloadJsonFile(data, `calling-conversations-${suffix}-${stamp}.json`);
+    setStatus(`Exported ${(data.conversations || []).length} conversation(s).`);
+  } catch (e) {
+    setStatus(String(e?.message || e));
+  }
+}
+
+async function importConversationsFromFile(file) {
+  if (!file) return;
+  let text = "";
+  try {
+    text = await file.text();
+  } catch (e) {
+    setStatus(`Read file failed: ${e?.message || e}`);
+    return;
+  }
+  let bundle;
+  try {
+    bundle = JSON.parse(text);
+  } catch {
+    setStatus("Invalid JSON file.");
+    return;
+  }
+  const modePick = window.prompt(
+    "导入模式：merge（合并/覆盖同 ID）、replace（清空后导入）、import_as_new（全部新 ID）",
+    "merge"
+  );
+  if (modePick == null) return;
+  const mode = ["merge", "replace", "import_as_new"].includes(modePick.trim())
+    ? modePick.trim()
+    : "merge";
+  if (mode === "replace") {
+    const ok = window.confirm("replace 会清空当前账号下的全部会话后再导入，确定继续？");
+    if (!ok) return;
+  }
+  try {
+    const res = await fetch("/api/conversations/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bundle, mode }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Import failed");
+    await refreshConversationList();
+    const idMap = data.id_map || {};
+    let nextId = conversationId;
+    if (conversationId && idMap[conversationId]) nextId = idMap[conversationId];
+    else if (conversationsCache && conversationsCache.length) nextId = conversationsCache[0].conversation_id;
+    if (nextId) await selectConversation(nextId);
+    else await ensureConversationSelected();
+    setStatus(`Imported ${data.imported || 0} conversation(s) (${mode}).`);
+  } catch (e) {
+    setStatus(String(e?.message || e));
+  }
+}
 
 async function deleteConversation(cid) {
   if (!cid) return;

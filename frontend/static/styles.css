@@ -135,6 +135,18 @@ body{
 .conv-body{
   padding: 12px 14px 16px;
 }
+.conv-actions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.conv-actions .btn{
+  flex: 1;
+  min-width: 72px;
+  font-size: 12px;
+  padding: 8px 10px;
+}
 .conv-list{
   margin-top: 12px;
   display:flex;
