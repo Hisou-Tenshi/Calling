@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import time
 import uuid
@@ -8,6 +9,8 @@ from typing import Any
 import requests
 
 from backend.util import ensure_dir
+
+logger = logging.getLogger("calling.conversation_store")
 
 
 @dataclass
@@ -54,7 +57,7 @@ def _auto_title(messages: list[dict[str, Any]], current: str) -> str:
 
 
 class ConversationStore:
-    """Conversation persistence with optional Upstash Redis backend on serverless."""
+    """Conversation persistence with optional Upstash Redis; falls back to local JSON file."""
 
     def __init__(
         self,
@@ -66,12 +69,28 @@ class ConversationStore:
     ):
         self.db_path = db_path
         self._redis_key_prefix = redis_key_prefix.rstrip(":")
-        self._use_redis = bool(upstash_rest_url and upstash_rest_token)
+        self._redis_configured = bool(upstash_rest_url and upstash_rest_token)
+        self._redis_disabled = False
         self._upstash_url = (upstash_rest_url or "").rstrip("/")
         self._upstash_token = upstash_rest_token or ""
-        self._data: dict[str, Conversation] = {}
+        self._redis_cache: dict[str, dict[str, Conversation]] = {}
         ensure_dir(os.path.dirname(db_path))
-        self._load()
+        self._data: dict[str, Conversation] = self._load_file()
+
+    @property
+    def _use_redis(self) -> bool:
+        return self._redis_configured and not self._redis_disabled
+
+    def _disable_redis(self, reason: Exception | str) -> None:
+        if self._redis_disabled:
+            return
+        self._redis_disabled = True
+        self._redis_cache.clear()
+        logger.warning(
+            "Upstash Redis unavailable (%s). Conversation storage will use local file: %s",
+            reason,
+            self.db_path,
+        )
 
     def _owner_key(self, owner: str | None) -> str:
         o = (owner or "local").strip() or "local"
@@ -81,18 +100,24 @@ class ConversationStore:
         return f"{self._redis_key_prefix}:{self._owner_key(owner)}"
 
     def _redis_call(self, command: list[str]) -> Any:
+        if not self._use_redis:
+            return None
         url = f"{self._upstash_url}/pipeline"
         headers = {
             "Authorization": f"Bearer {self._upstash_token}",
             "Content-Type": "application/json",
         }
         payload = [{"command": command}]
-        r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
-        r.raise_for_status()
-        data = r.json() or []
-        if not data:
+        try:
+            r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=8)
+            r.raise_for_status()
+            data = r.json() or []
+            if not data:
+                return None
+            return (data[0] or {}).get("result")
+        except requests.RequestException as e:
+            self._disable_redis(e)
             return None
-        return (data[0] or {}).get("result")
 
     def _load_owner_from_redis(self, owner: str | None) -> dict[str, Conversation]:
         raw = self._redis_call(["GET", self._redis_key(owner)])
@@ -112,6 +137,8 @@ class ConversationStore:
         return self._parse_payload(parsed, owner)
 
     def _save_owner_to_redis(self, owner: str | None, data: dict[str, Conversation]) -> None:
+        if not self._use_redis:
+            return
         payload: dict[str, Any] = {}
         for cid, conv in data.items():
             payload[cid] = {
@@ -130,13 +157,14 @@ class ConversationStore:
         for cid, c in (raw or {}).items():
             if not isinstance(c, dict):
                 continue
+            conv_owner = str(c.get("owner") or owner_norm)
             data[cid] = Conversation(
                 conversation_id=cid,
                 title=str(c.get("title") or "Untitled"),
                 updated_at=float(c.get("updated_at") or 0.0),
                 messages=_normalize_messages(c.get("messages")),
                 uploaded_files=list(c.get("uploaded_files") or []),
-                owner=str(c.get("owner") or owner_norm),
+                owner=conv_owner,
             )
         return data
 
@@ -150,9 +178,9 @@ class ConversationStore:
             raw = {}
         return self._parse_payload(raw, None)
 
-    def _save_file(self, data: dict[str, Conversation]) -> None:
+    def _save_file(self) -> None:
         payload: dict[str, Any] = {}
-        for cid, conv in data.items():
+        for cid, conv in self._data.items():
             payload[cid] = {
                 "title": conv.title,
                 "updated_at": conv.updated_at,
@@ -165,40 +193,38 @@ class ConversationStore:
             json.dump(payload, f, ensure_ascii=False, indent=2)
         os.replace(tmp, self.db_path)
 
-    def _load(self) -> None:
-        if self._use_redis:
-            # In-memory cache is per-owner lazy loaded.
-            self._data = {}
-            return
-        self._data = self._load_file()
+    def _owner_data_file(self, owner: str | None) -> dict[str, Conversation]:
+        owner_norm = (owner or "local").strip() or "local"
+        return {cid: c for cid, c in self._data.items() if c.owner == owner_norm}
 
     def _owner_data(self, owner: str | None) -> dict[str, Conversation]:
-        owner_norm = (owner or "local").strip() or "local"
         if not self._use_redis:
-            return {cid: c for cid, c in self._data.items() if c.owner == owner_norm}
+            return self._owner_data_file(owner)
         cache_key = self._owner_key(owner)
-        if not hasattr(self, "_redis_cache"):
-            self._redis_cache = {}
         if cache_key not in self._redis_cache:
             self._redis_cache[cache_key] = self._load_owner_from_redis(owner)
+            if not self._use_redis:
+                return self._owner_data_file(owner)
         return self._redis_cache[cache_key]
 
     def _commit_owner(self, owner: str | None, data: dict[str, Conversation]) -> None:
         owner_norm = (owner or "local").strip() or "local"
+
         if self._use_redis:
             cache_key = self._owner_key(owner)
-            if not hasattr(self, "_redis_cache"):
-                self._redis_cache = {}
             self._redis_cache[cache_key] = data
             self._save_owner_to_redis(owner, data)
-            return
-        # file mode: merge owner slice into global map
+
+        # Always mirror to local file so chat works when Redis is down or on single-node deploy.
         for cid in list(self._data.keys()):
             if self._data[cid].owner == owner_norm and cid not in data:
                 del self._data[cid]
         for cid, conv in data.items():
             self._data[cid] = conv
-        self._save_file(self._data)
+        try:
+            self._save_file()
+        except Exception as e:
+            logger.error("Failed to save conversations to %s: %s", self.db_path, e)
 
     def list_conversations(self, owner: str | None = None) -> list[dict[str, Any]]:
         data = self._owner_data(owner)

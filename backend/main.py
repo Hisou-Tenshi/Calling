@@ -427,7 +427,12 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     def api_health():
-        return {"ok": True, "is_vercel": bool(os.getenv("VERCEL"))}
+        return {
+            "ok": True,
+            "is_vercel": bool(os.getenv("VERCEL")),
+            "conversation_storage": "redis" if conversation_store._use_redis else "file",
+            "redis_configured": bool(conversation_store._redis_configured),
+        }
 
     # ----------------------------
     # Auth endpoints (cookie sessions)
