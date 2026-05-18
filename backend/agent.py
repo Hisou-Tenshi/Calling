@@ -8,6 +8,12 @@ from google.genai import types
 from openai import OpenAI
 from openai import APIStatusError, APIConnectionError, APITimeoutError
 
+from backend.claude_compat import (
+    build_claude_request_kwargs,
+    claude_messages_create,
+    downgrade_claude_request_kwargs,
+    should_skip_claude_client,
+)
 from backend.tools import read_file_tool, web_search_tool
 
 
@@ -316,20 +322,28 @@ def call_claude_with_tools(
     tools = claude_tools_schema(max_search_results=settings.web_search_max_results)
 
     last_err: Exception | None = None
-    for client, _name in clients:
+    for client, client_name in clients:
+        if should_skip_claude_client(model, client_name):
+            continue
         try:
             used_web_search = False
             claude_messages = json.loads(json.dumps(claude_messages_base, ensure_ascii=False))
-            kwargs: dict[str, Any] = {
-                "model": model,
-                "max_tokens": 8192,
-                "system": system_prompt,
-                "messages": claude_messages,
-                "tools": tools,
-            }
+            kwargs = build_claude_request_kwargs(
+                model,
+                system=system_prompt,
+                messages=claude_messages,
+                tools=tools,
+            )
             tool_rounds = 0
 
-            response = client.messages.create(**kwargs)
+            try:
+                response = claude_messages_create(client, kwargs)
+            except Exception as e:
+                if "max_tokens" in str(e) and int(kwargs.get("max_tokens", 0)) > 8192:
+                    downgrade_claude_request_kwargs(kwargs)
+                    response = claude_messages_create(client, kwargs)
+                else:
+                    raise
             tool_rounds += 1
 
             while getattr(response, "stop_reason", None) == "tool_use" and tool_rounds <= max_tool_rounds:
@@ -366,7 +380,7 @@ def call_claude_with_tools(
 
                 claude_messages.append({"role": "user", "content": tool_results})
                 kwargs["messages"] = claude_messages
-                response = client.messages.create(**kwargs)
+                response = claude_messages_create(client, kwargs)
 
             # Final response
             answer = ""

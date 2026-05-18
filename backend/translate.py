@@ -961,19 +961,30 @@ def _call_claude(messages: list[dict], settings, model: str) -> str:
 
     from anthropic import Anthropic
 
-    clients = []
+    from backend.claude_compat import (
+        build_claude_request_kwargs,
+        claude_messages_create,
+        downgrade_claude_request_kwargs,
+        should_skip_claude_client,
+    )
+
+    clients: list[tuple[Any, str]] = []
 
     if settings.claude_proxy_key and settings.claude_proxy_base_url:
 
-        clients.append(Anthropic(api_key=settings.claude_proxy_key, base_url=settings.claude_proxy_base_url))
+        clients.append(
+            (Anthropic(api_key=settings.claude_proxy_key, base_url=settings.claude_proxy_base_url), "Proxy1")
+        )
 
     if settings.claude_proxy_key_2 and settings.claude_proxy_base_url_2:
 
-        clients.append(Anthropic(api_key=settings.claude_proxy_key_2, base_url=settings.claude_proxy_base_url_2))
+        clients.append(
+            (Anthropic(api_key=settings.claude_proxy_key_2, base_url=settings.claude_proxy_base_url_2), "Proxy2")
+        )
 
     if settings.claude_api_key:
 
-        clients.append(Anthropic(api_key=settings.claude_api_key))
+        clients.append((Anthropic(api_key=settings.claude_api_key), "Official"))
 
     if not clients:
 
@@ -987,19 +998,31 @@ def _call_claude(messages: list[dict], settings, model: str) -> str:
 
     last_err: Exception | None = None
 
-    for client in clients:
+    for client, client_name in clients:
+
+        if should_skip_claude_client(model, client_name):
+
+            continue
 
         try:
 
-            resp = client.messages.create(
+            kwargs = build_claude_request_kwargs(model, system=system, messages=user_msgs)
 
-                model=model, max_tokens=8192,
+            try:
 
-                system=system,
+                resp = claude_messages_create(client, kwargs)
 
-                messages=user_msgs,
+            except Exception as e:
 
-            )
+                if "max_tokens" in str(e) and int(kwargs.get("max_tokens", 0)) > 8192:
+
+                    downgrade_claude_request_kwargs(kwargs)
+
+                    resp = claude_messages_create(client, kwargs)
+
+                else:
+
+                    raise
 
             for block in resp.content:
 

@@ -460,8 +460,9 @@ def create_app() -> FastAPI:
             return {"default": settings.trial_model, "options": [settings.trial_model], "trial_only": True}
 
         claude_models = [
-            "claude-opus-4-6-thinking",
+            "claude-opus-4-7",
             "claude-opus-4-6",
+            "claude-opus-4-6-thinking",
             "claude-3-5-sonnet-20241022",
             "claude-3-opus-20240229",
         ]
