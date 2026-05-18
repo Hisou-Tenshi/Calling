@@ -121,12 +121,17 @@ jobs:
             python src/perception_layer.py > /tmp/elaina_runtime.log 2>&1
           fi
           code=$?
-          if [ $code -ne 0 ]; then
-            exit $code
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 2 ]; then
+            echo "Perception skipped (probability/cooldown); no commit needed."
+            exit 0
+          fi
+          if [ "$code" -ne 0 ]; then
+            exit "$code"
           fi
 
       - name: Commit and Push Changes (to Elaina repo)
-        if: steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'success'
+        if: steps.guard_webhook.outputs.should_skip != 'true' && steps.run_perception.outcome == 'success' && steps.run_perception.outputs.exit_code != '2'
         working-directory: elaina
         run: |
           git config --global --add safe.directory "*"
@@ -134,7 +139,7 @@ jobs:
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
           # 鲁棒地添加文件：逐个检查是否存在
-          for f in Elaina.json data/tenshi_log.json logs/; do
+          for f in Elaina.json data/tenshi_log.json; do
             if [ -e "$f" ]; then
               git add "$f"
             fi
