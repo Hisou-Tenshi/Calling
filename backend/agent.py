@@ -14,6 +14,12 @@ from backend.claude_compat import (
     downgrade_claude_request_kwargs,
     should_skip_claude_client,
 )
+from backend.llm_routing import (
+    build_claude_proxy_configs,
+    build_gemini_paths_from_settings,
+    build_grok_paths_from_settings,
+    run_path_first,
+)
 from backend.tools import read_file_tool, web_search_tool
 
 
@@ -146,8 +152,14 @@ def call_grok_with_tools(
     tool_exec: dict[str, Callable[[dict[str, Any]], Any]],
     force_web_search: bool,
     max_tool_rounds: int = 8,
+    llm_path: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    client = OpenAI(api_key=settings.grok_api_key, base_url=getattr(settings, "grok_base_url", "https://api.x.ai/v1"))
+    path = llm_path or {
+        "name": "Official",
+        "api_key": settings.grok_api_key,
+        "base_url": getattr(settings, "grok_base_url", "https://api.x.ai/v1"),
+    }
+    client = OpenAI(api_key=path["api_key"], base_url=path.get("base_url") or "https://api.x.ai/v1")
 
     model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     for m in _build_provider_messages(messages):
@@ -287,6 +299,18 @@ def call_openai_compat_with_tools(
         "thinking": "",
     }
 
+def _build_claude_clients(settings: Any) -> list[tuple[Anthropic, str]]:
+    """Claude：代理优先，官方最后。"""
+    clients: list[tuple[Anthropic, str]] = []
+    for proxy in build_claude_proxy_configs(settings):
+        clients.append(
+            (Anthropic(api_key=proxy["api_key"], base_url=proxy["base_url"]), proxy["name"])
+        )
+    if settings.claude_api_key:
+        clients.append((Anthropic(api_key=settings.claude_api_key), "Official"))
+    return clients
+
+
 def call_claude_with_tools(
     *,
     settings: Any,
@@ -297,19 +321,7 @@ def call_claude_with_tools(
     force_web_search: bool,
     max_tool_rounds: int = 8,
 ) -> dict[str, Any]:
-    clients: list[tuple[Anthropic, str]] = []
-
-    # Optional proxies (same var names as Tenshi)
-    if settings.claude_proxy_key and settings.claude_proxy_base_url:
-        clients.append(
-            (Anthropic(api_key=settings.claude_proxy_key, base_url=settings.claude_proxy_base_url), "Proxy1")
-        )
-    if settings.claude_proxy_key_2 and settings.claude_proxy_base_url_2:
-        clients.append(
-            (Anthropic(api_key=settings.claude_proxy_key_2, base_url=settings.claude_proxy_base_url_2), "Proxy2")
-        )
-    if settings.claude_api_key:
-        clients.append((Anthropic(api_key=settings.claude_api_key), "Official"))
+    clients = _build_claude_clients(settings)
 
     if not clients:
         raise RuntimeError("No Claude API client configured (CLAUDE_API_KEY and/or CLAUDE_PROXY_* missing).")
@@ -408,11 +420,16 @@ def call_gemini_with_tools(
     force_web_search: bool,
     project_root_abs: str,
     max_tool_rounds: int = 8,
+    llm_path: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not settings.gemini_api_key:
+    path = llm_path or {"name": "Official", "api_key": settings.gemini_api_key, "base_url": None}
+    if not path.get("api_key"):
         raise RuntimeError("GEMINI_API_KEY is not configured.")
 
-    client = genai.Client(api_key=settings.gemini_api_key)
+    http_options = None
+    if path.get("base_url"):
+        http_options = types.HttpOptions(base_url=path["base_url"])
+    client = genai.Client(api_key=path["api_key"], http_options=http_options)
     tools = gemini_tools_wrappers(project_root_abs=project_root_abs)
 
     msgs = _build_provider_messages(messages)
@@ -523,13 +540,21 @@ def route_and_chat(
             ]
 
         if provider == "grok":
-            r = call_grok_with_tools(
-                settings=settings,
-                model=model,
-                system_prompt=system_prompt,
-                messages=msgs,
-                tool_exec=tool_exec,
-                force_web_search=force_web_search,
+            paths = build_grok_paths_from_settings(settings)
+            if not paths:
+                raise RuntimeError("GROK_API_KEY is not configured.")
+            r = run_path_first(
+                [model],
+                paths,
+                lambda mid, p: call_grok_with_tools(
+                    settings=settings,
+                    model=mid,
+                    system_prompt=system_prompt,
+                    messages=msgs,
+                    tool_exec=tool_exec,
+                    force_web_search=force_web_search,
+                    llm_path=p,
+                ),
             )
         elif provider == "openai_compat":
             r = call_openai_compat_with_tools(
@@ -552,15 +577,23 @@ def route_and_chat(
                 max_tool_rounds=8,
             )
         else:
-            r = call_gemini_with_tools(
-                settings=settings,
-                model=model,
-                system_prompt=system_prompt,
-                messages=msgs,
-                tool_exec=tool_exec,
-                force_web_search=force_web_search,
-                project_root_abs=project_root_abs,
-                max_tool_rounds=8,
+            paths = build_gemini_paths_from_settings(settings)
+            if not paths:
+                raise RuntimeError("GEMINI_API_KEY is not configured.")
+            r = run_path_first(
+                [model],
+                paths,
+                lambda mid, p: call_gemini_with_tools(
+                    settings=settings,
+                    model=mid,
+                    system_prompt=system_prompt,
+                    messages=msgs,
+                    tool_exec=tool_exec,
+                    force_web_search=force_web_search,
+                    project_root_abs=project_root_abs,
+                    max_tool_rounds=8,
+                    llm_path=p,
+                ),
             )
 
         answer = r.get("answer") or ""

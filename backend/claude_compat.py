@@ -47,8 +47,10 @@ def downgrade_claude_request_kwargs(kwargs: dict[str, Any]) -> None:
 
 
 def should_skip_claude_client(model: str, client_name: str) -> bool:
-    """Legacy alias is proxy-only in this project."""
-    return model == "claude-opus-4-6-thinking" and client_name == "Official"
+    """thinking 模型仅走代理（官方无单分 thinking）。"""
+    from backend.llm_routing import should_skip_claude_client as _skip
+
+    return _skip(model, client_name)
 
 
 def claude_messages_create(client: Any, kwargs: dict[str, Any]) -> Any:

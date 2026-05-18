@@ -968,22 +968,14 @@ def _call_claude(messages: list[dict], settings, model: str) -> str:
         should_skip_claude_client,
     )
 
+    from backend.llm_routing import build_claude_proxy_configs
+
     clients: list[tuple[Any, str]] = []
-
-    if settings.claude_proxy_key and settings.claude_proxy_base_url:
-
+    for proxy in build_claude_proxy_configs(settings):
         clients.append(
-            (Anthropic(api_key=settings.claude_proxy_key, base_url=settings.claude_proxy_base_url), "Proxy1")
+            (Anthropic(api_key=proxy["api_key"], base_url=proxy["base_url"]), proxy["name"])
         )
-
-    if settings.claude_proxy_key_2 and settings.claude_proxy_base_url_2:
-
-        clients.append(
-            (Anthropic(api_key=settings.claude_proxy_key_2, base_url=settings.claude_proxy_base_url_2), "Proxy2")
-        )
-
     if settings.claude_api_key:
-
         clients.append((Anthropic(api_key=settings.claude_api_key), "Official"))
 
     if not clients:
