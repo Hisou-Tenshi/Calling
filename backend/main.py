@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from backend.config import load_settings
-from backend.agent import make_tool_exec, route_and_chat
+from backend.agent import make_tool_exec, route_and_chat, route_and_chat_stream
 from backend.ingest import ingest_file_for_rag
 from backend.embeddings import make_gemini_embedding_fn
 from backend.rag_store import RagStore
@@ -183,7 +183,11 @@ def create_app() -> FastAPI:
     uploads_dir = settings.uploads_dir
 
     rag_store = RagStore(settings.rag_db_path)
-    conversation_store = ConversationStore(os.path.join(settings.data_dir, "conversations.json"))
+    conversation_store = ConversationStore(
+        os.path.join(settings.data_dir, "conversations.json"),
+        upstash_rest_url=settings.upstash_redis_rest_url,
+        upstash_rest_token=settings.upstash_redis_rest_token,
+    )
     embedding_fn = None
     if settings.gemini_api_key:
         embedding_fn = make_gemini_embedding_fn(gemini_api_key=settings.gemini_api_key)
@@ -240,6 +244,7 @@ def create_app() -> FastAPI:
         ar = authenticate_request(request, settings=settings)
         authed = bool(ar.ok)
         request.state.authed = authed
+        request.state.user_id = ar.user_id if authed else None
         request.state.trial = False
 
         is_trial_path = (path in trial_paths) or path.startswith("/api/conversations")
@@ -271,6 +276,7 @@ def create_app() -> FastAPI:
                 ar = require_auth(request, settings=settings)
             except HTTPException as e:
                 return JSONResponse({"detail": e.detail}, status_code=e.status_code)
+            request.state.user_id = ar.user_id
 
         uid = (ar.user_id or "user") if authed else "anon"
 
@@ -309,41 +315,17 @@ def create_app() -> FastAPI:
 
     tool_exec = make_tool_exec(project_root)
 
-    @app.get("/api/health")
-    def api_health():
-        return {"ok": True, "is_vercel": bool(os.getenv("VERCEL"))}
+    def _conversation_owner(request: Request) -> str:
+        if getattr(request.state, "trial", False):
+            return f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
+        uid = getattr(request.state, "user_id", None)
+        if uid:
+            return f"user:{uid}"
+        return "local"
 
-    # ----------------------------
-    # Auth endpoints (cookie sessions)
-    # ----------------------------
-    @app.get("/api/auth/me")
-    def api_auth_me(request: Request):
-        ar = require_auth(request, settings=settings)
-        return {"ok": True, "user_id": ar.user_id, "login": ar.user_login, "method": ar.method}
-
-    @app.get("/api/auth/logout")
-    def api_auth_logout(request: Request):
-        return logout_response(request)
-
-    @app.post("/api/auth/password")
-    async def api_auth_password(request: Request, payload: dict[str, Any] | None = None):
-        if payload is None:
-            payload = {}
-        pw = (payload.get("password") or "").strip()
-        device = (request.headers.get("x-calling-device") or "").strip() or None
-        return password_login(request, settings=settings, password=pw, device=device)
-
-    @app.get("/api/auth/github/start")
-    def api_auth_github_start(request: Request):
-        return github_oauth_start(request, settings=settings)
-
-    @app.get("/api/auth/github/callback")
-    def api_auth_github_callback(request: Request):
-        return github_oauth_callback(request, settings=settings)
-
-    def _run_chat(payload: dict[str, Any]) -> dict[str, Any]:
+    def _prepare_chat_payload(payload: dict[str, Any]) -> dict[str, Any]:
         model = payload.get("model") or settings.default_chat_model
-        conversation_id = payload.get("conversation_id") or "default"
+        conversation_id = (payload.get("conversation_id") or "default").strip() or "default"
         messages = payload.get("messages") or []
         rag_enabled = bool(payload.get("rag_enabled"))
         force_web_search = bool(payload.get("force_web_search"))
@@ -362,7 +344,7 @@ def create_app() -> FastAPI:
 
         trimmed = _trim_conversation(work_messages, max_user_turns=20)
         latest_user = _latest_user_text(trimmed)
-        if not latest_user and any(m.get("role") == "user" for m in trimmed) is False:
+        if not latest_user and not any(m.get("role") == "user" for m in trimmed):
             raise HTTPException(status_code=400, detail="No user content found")
 
         rag_context = ""
@@ -420,10 +402,77 @@ def create_app() -> FastAPI:
         if rag_enabled and rag_context.strip():
             system_prompt += f"\n\nRAG_CONTEXT:\n{rag_context}"
 
+        return {
+            "model": model,
+            "conversation_id": conversation_id,
+            "work_messages": work_messages,
+            "trimmed": trimmed,
+            "rag_enabled": rag_enabled,
+            "force_web_search": force_web_search,
+            "uploaded_files": uploaded_files,
+            "system_prompt": system_prompt,
+            "retrieved": retrieved,
+            "rag_context": rag_context,
+        }
+
+    def _persist_conversation(
+        *,
+        conversation_id: str,
+        messages: list[dict[str, Any]],
+        uploaded_files: list[str],
+        owner: str,
+    ) -> None:
+        conversation_store.upsert_messages(conversation_id, messages, owner=owner)
+        conversation_store.set_uploaded_files(conversation_id, uploaded_files, owner=owner)
+
+    @app.get("/api/health")
+    def api_health():
+        return {"ok": True, "is_vercel": bool(os.getenv("VERCEL"))}
+
+    # ----------------------------
+    # Auth endpoints (cookie sessions)
+    # ----------------------------
+    @app.get("/api/auth/me")
+    def api_auth_me(request: Request):
+        ar = require_auth(request, settings=settings)
+        return {"ok": True, "user_id": ar.user_id, "login": ar.user_login, "method": ar.method}
+
+    @app.get("/api/auth/logout")
+    def api_auth_logout(request: Request):
+        return logout_response(request)
+
+    @app.post("/api/auth/password")
+    async def api_auth_password(request: Request, payload: dict[str, Any] | None = None):
+        if payload is None:
+            payload = {}
+        pw = (payload.get("password") or "").strip()
+        device = (request.headers.get("x-calling-device") or "").strip() or None
+        return password_login(request, settings=settings, password=pw, device=device)
+
+    @app.get("/api/auth/github/start")
+    def api_auth_github_start(request: Request):
+        return github_oauth_start(request, settings=settings)
+
+    @app.get("/api/auth/github/callback")
+    def api_auth_github_callback(request: Request):
+        return github_oauth_callback(request, settings=settings)
+
+    def _run_chat(payload: dict[str, Any], *, owner: str) -> dict[str, Any]:
+        ctx = _prepare_chat_payload(payload)
+        model = ctx["model"]
+        conversation_id = ctx["conversation_id"]
+        work_messages = ctx["work_messages"]
+        trimmed = ctx["trimmed"]
+        rag_enabled = ctx["rag_enabled"]
+        force_web_search = ctx["force_web_search"]
+        uploaded_files = ctx["uploaded_files"]
+        rag_context = ctx["rag_context"]
+        retrieved = ctx["retrieved"]
+
         r = route_and_chat(
             settings=settings,
             model=model,
-            system_prompt=system_prompt,
+            system_prompt=ctx["system_prompt"],
             messages=trimmed,
             tool_exec=tool_exec,
             force_web_search=force_web_search,
@@ -439,8 +488,12 @@ def create_app() -> FastAPI:
         full_messages = (work_messages or []) + [
             {"role": "assistant", "content": content, "model": model, "thinking": thinking}
         ]
-        conversation_store.upsert_messages(conversation_id, full_messages)
-        conversation_store.set_uploaded_files(conversation_id, uploaded_files)
+        _persist_conversation(
+            conversation_id=conversation_id,
+            messages=full_messages,
+            uploaded_files=uploaded_files,
+            owner=owner,
+        )
 
         return {
             "conversation_id": conversation_id,
@@ -482,18 +535,21 @@ def create_app() -> FastAPI:
         return {"default": settings.trial_model, "options": options, "trial_only": False}
 
     @app.post("/api/conversations/new")
-    def api_new_conversation():
-        conv = conversation_store.create_new()
+    def api_new_conversation(request: Request):
+        owner = _conversation_owner(request)
+        conv = conversation_store.create_new(owner=owner)
         return {"conversation_id": conv.conversation_id}
 
     @app.get("/api/conversations")
-    def api_list_conversations():
-        return {"conversations": conversation_store.list_conversations()}
+    def api_list_conversations(request: Request):
+        owner = _conversation_owner(request)
+        return {"conversations": conversation_store.list_conversations(owner=owner)}
 
     @app.get("/api/conversations/{conversation_id}")
-    def api_get_conversation(conversation_id: str):
+    def api_get_conversation(request: Request, conversation_id: str):
+        owner = _conversation_owner(request)
         try:
-            conv = conversation_store.get(conversation_id)
+            conv = conversation_store.get(conversation_id, owner=owner)
         except KeyError:
             raise HTTPException(status_code=404, detail="conversation not found")
         return {
@@ -503,15 +559,39 @@ def create_app() -> FastAPI:
             "uploaded_files": conv.uploaded_files,
         }
 
+    @app.put("/api/conversations/{conversation_id}/messages")
+    def api_sync_conversation_messages(request: Request, conversation_id: str, payload: dict[str, Any]):
+        owner = _conversation_owner(request)
+        messages = payload.get("messages")
+        uploaded_files = payload.get("uploaded_files")
+        if not isinstance(messages, list):
+            raise HTTPException(status_code=400, detail="messages must be a list")
+        try:
+            conv = conversation_store.get(conversation_id, owner=owner)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="conversation not found")
+        conversation_store.upsert_messages(conversation_id, messages, owner=owner)
+        if isinstance(uploaded_files, list):
+            conversation_store.set_uploaded_files(conversation_id, uploaded_files, owner=owner)
+        else:
+            uploaded_files = conv.uploaded_files
+        return {
+            "conversation_id": conversation_id,
+            "message_count": len(messages),
+            "uploaded_files": uploaded_files,
+        }
+
     @app.delete("/api/conversations/{conversation_id}")
-    def api_delete_conversation(conversation_id: str):
-        ok = conversation_store.delete_conversation(conversation_id)
+    def api_delete_conversation(request: Request, conversation_id: str):
+        owner = _conversation_owner(request)
+        ok = conversation_store.delete_conversation(conversation_id, owner=owner)
         if not ok:
             raise HTTPException(status_code=404, detail="conversation not found")
         return {"deleted": True, "conversation_id": conversation_id}
 
     @app.post("/api/conversations/fork")
-    def api_fork_conversation(payload: dict[str, Any]):
+    def api_fork_conversation(request: Request, payload: dict[str, Any]):
+        owner = _conversation_owner(request)
         source_conversation_id = (payload.get("conversation_id") or "").strip()
         fork_messages = payload.get("messages")
         uploaded = payload.get("uploaded_files") or []
@@ -520,13 +600,17 @@ def create_app() -> FastAPI:
         if not isinstance(fork_messages, list):
             raise HTTPException(status_code=400, detail="messages must be a list")
         try:
-            src = conversation_store.get(source_conversation_id)
+            src = conversation_store.get(source_conversation_id, owner=owner)
         except KeyError:
             raise HTTPException(status_code=404, detail="source conversation not found")
 
-        new_conv = conversation_store.create_new()
-        conversation_store.upsert_messages(new_conv.conversation_id, fork_messages)
-        conversation_store.set_uploaded_files(new_conv.conversation_id, uploaded or list(src.uploaded_files or []))
+        new_conv = conversation_store.create_new(owner=owner)
+        conversation_store.upsert_messages(new_conv.conversation_id, fork_messages, owner=owner)
+        conversation_store.set_uploaded_files(
+            new_conv.conversation_id,
+            uploaded or list(src.uploaded_files or []),
+            owner=owner,
+        )
         return {"conversation_id": new_conv.conversation_id}
 
     @app.post("/api/upload")
@@ -539,12 +623,13 @@ def create_app() -> FastAPI:
         conversation_id = (conversation_id or "").strip()
         if not conversation_id:
             conversation_id = "default"
+        owner = _conversation_owner(request)
 
         rag_enable_bool = rag_enable.lower() in ("1", "true", "yes", "on")
         uploaded: list[dict[str, Any]] = []
         # Keep conversation uploaded list in sync
         try:
-            conv = conversation_store.get(conversation_id)
+            conv = conversation_store.get(conversation_id, owner=owner)
             current_uploaded = list(conv.uploaded_files or [])
         except KeyError:
             current_uploaded = []
@@ -589,22 +674,20 @@ def create_app() -> FastAPI:
                 }
             )
 
-        conversation_store.set_uploaded_files(conversation_id, current_uploaded)
+        conversation_store.set_uploaded_files(conversation_id, current_uploaded, owner=owner)
         return {"uploaded": uploaded}
 
     @app.post("/api/chat")
     async def api_chat(request: Request, payload: dict[str, Any]):
         try:
+            owner = _conversation_owner(request)
             if getattr(request.state, "trial", False):
                 payload = dict(payload or {})
                 payload["model"] = settings.trial_model
                 payload["rag_enabled"] = False
                 payload["force_web_search"] = False
                 payload["uploaded_files"] = []
-                # Keep caller-provided conversation_id so UI can persist multiple chats.
-                if not (payload.get("conversation_id") or "").strip():
-                    payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
-            return JSONResponse(_run_chat(payload))
+            return JSONResponse(_run_chat(payload, owner=owner))
         except HTTPException as e:
             return JSONResponse({"detail": e.detail}, status_code=e.status_code)
         except Exception as e:
@@ -614,24 +697,95 @@ def create_app() -> FastAPI:
     async def api_chat_stream(request: Request, payload: dict[str, Any]):
         import asyncio
 
+        owner = _conversation_owner(request)
         if getattr(request.state, "trial", False):
             payload = dict(payload or {})
             payload["model"] = settings.trial_model
             payload["rag_enabled"] = False
             payload["force_web_search"] = False
             payload["uploaded_files"] = []
-            if not (payload.get("conversation_id") or "").strip():
-                payload["conversation_id"] = f"trial:{get_request_ip(dict(request.headers), fallback='unknown')}"
 
         def _sse(event: str, data: Any) -> str:
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
         async def event_stream():
             q: Queue = Queue()
+            persist_state: dict[str, Any] = {"answer": "", "thinking": ""}
 
             def _worker():
                 try:
-                    q.put(("result", _run_chat(payload)))
+                    ctx = _prepare_chat_payload(payload)
+                    conversation_id = ctx["conversation_id"]
+                    work_messages = ctx["work_messages"]
+                    model = ctx["model"]
+                    uploaded_files = ctx["uploaded_files"]
+                    _persist_conversation(
+                        conversation_id=conversation_id,
+                        messages=work_messages,
+                        uploaded_files=uploaded_files,
+                        owner=owner,
+                    )
+
+                    for evt in route_and_chat_stream(
+                        settings=settings,
+                        model=model,
+                        system_prompt=ctx["system_prompt"],
+                        messages=ctx["trimmed"],
+                        tool_exec=tool_exec,
+                        force_web_search=ctx["force_web_search"],
+                        project_root_abs=project_root,
+                    ):
+                        event_name = evt.get("event")
+                        if event_name == "_final":
+                            answer = evt.get("answer") or ""
+                            thinking = evt.get("thinking") or ""
+                            used_web_search = bool(evt.get("used_web_search"))
+                            if ctx["force_web_search"] and not used_web_search:
+                                q.put(
+                                    (
+                                        "http_error",
+                                        {
+                                            "detail": "force_web_search enabled but web_search was not called.",
+                                            "status_code": 400,
+                                        },
+                                    )
+                                )
+                                return
+                            full_messages = (work_messages or []) + [
+                                {
+                                    "role": "assistant",
+                                    "content": answer,
+                                    "model": model,
+                                    "thinking": thinking,
+                                }
+                            ]
+                            _persist_conversation(
+                                conversation_id=conversation_id,
+                                messages=full_messages,
+                                uploaded_files=uploaded_files,
+                                owner=owner,
+                            )
+                            q.put(
+                                (
+                                    "done",
+                                    {
+                                        "conversation_id": conversation_id,
+                                        "assistant": answer,
+                                        "thinking": thinking,
+                                        "rag_enabled": ctx["rag_enabled"],
+                                        "rag_used": bool(ctx["rag_context"].strip()),
+                                        "retrieved_chunks": ctx["retrieved"],
+                                        "web_search_called": used_web_search,
+                                        "model": model,
+                                    },
+                                )
+                            )
+                            return
+                        if event_name == "answer_delta":
+                            persist_state["answer"] += evt.get("text") or ""
+                        elif event_name == "thinking_delta" and not evt.get("transient"):
+                            persist_state["thinking"] += evt.get("text") or ""
+                        q.put(("stream_evt", evt))
                 except HTTPException as e:
                     q.put(("http_error", {"detail": e.detail, "status_code": e.status_code}))
                 except Exception as e:
@@ -642,15 +796,45 @@ def create_app() -> FastAPI:
             yield _sse("status", {"stage": "started", "message": "Assistant is thinking..."})
 
             while True:
+                if await request.is_disconnected():
+                    try:
+                        ctx = _prepare_chat_payload(payload)
+                        partial = (persist_state.get("answer") or "").strip()
+                        if partial:
+                            work_messages = list(ctx["work_messages"])
+                            work_messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": persist_state.get("answer") or "",
+                                    "model": ctx["model"],
+                                    "thinking": persist_state.get("thinking") or "",
+                                    "interrupted": True,
+                                }
+                            )
+                            _persist_conversation(
+                                conversation_id=ctx["conversation_id"],
+                                messages=work_messages,
+                                uploaded_files=ctx["uploaded_files"],
+                                owner=owner,
+                            )
+                    except Exception:
+                        pass
+                    return
+
                 try:
                     kind, data = q.get_nowait()
                 except Empty:
                     elapsed = int((time.time() - started_at) * 1000)
-                    yield _sse(
-                        "thinking_delta",
-                        {"text": f"思考中... {elapsed / 1000:.1f}s", "transient": True, "elapsed_ms": elapsed},
-                    )
-                    await asyncio.sleep(0.35)
+                    if elapsed > 2500:
+                        yield _sse(
+                            "thinking_delta",
+                            {
+                                "text": f"思考中... {elapsed / 1000:.1f}s",
+                                "transient": True,
+                                "elapsed_ms": elapsed,
+                            },
+                        )
+                    await asyncio.sleep(0.05)
                     continue
 
                 if kind == "http_error":
@@ -659,25 +843,24 @@ def create_app() -> FastAPI:
                 if kind == "error":
                     yield _sse("error", {"detail": data.get("detail"), "status_code": 500})
                     return
-
-                thinking = (data.get("thinking") or "").strip()
-                assistant = data.get("assistant") or ""
-                if thinking:
-                    for i in range(0, len(thinking), 120):
-                        yield _sse("thinking_delta", {"text": thinking[i : i + 120], "transient": False})
-                        await asyncio.sleep(0.01)
-
-                for i in range(0, len(assistant), 120):
-                    yield _sse("answer_delta", {"text": assistant[i : i + 120]})
-                    await asyncio.sleep(0.01)
-
-                yield _sse("done", data)
-                return
+                if kind == "stream_evt":
+                    evt = data or {}
+                    event_name = evt.get("event")
+                    if event_name in ("answer_delta", "thinking_delta", "status"):
+                        yield _sse(event_name, {k: v for k, v in evt.items() if k != "event"})
+                    continue
+                if kind == "done":
+                    yield _sse("done", data)
+                    return
 
         return StreamingResponse(
             event_stream(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
 
 

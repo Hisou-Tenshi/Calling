@@ -70,6 +70,7 @@ let uploadedFiles = []; // ["data/uploads/xxx"]
 let conversationsCache = [];
 let chatBusy = false;
 let chatAbortController = null;
+let streamingAssistantIndex = -1;
 
 let authedUser = null;
 let trialOnly = false;
@@ -380,8 +381,70 @@ function isCurrentConversationEmpty() {
   return (messages || []).length === 0 && (uploadedFiles || []).length === 0;
 }
 
+function parseSsePart(part) {
+  const lines = String(part || "").split("\n");
+  let eventName = "";
+  const dataLines = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) eventName = line.slice(6).trim();
+    else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+  }
+  if (!eventName || !dataLines.length) return null;
+  try {
+    return { eventName, data: JSON.parse(dataLines.join("\n")) };
+  } catch {
+    return null;
+  }
+}
+
+async function syncMessagesToServer() {
+  if (!conversationId) return;
+  try {
+    await fetch(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages,
+        uploaded_files: uploadedFiles,
+      }),
+    });
+  } catch {
+    // best-effort persistence
+  }
+}
+
+function updateStreamingAssistantView() {
+  if (streamingAssistantIndex < 0) return;
+  const wrap = messagesEl.querySelector(`.msg[data-index="${streamingAssistantIndex}"]`);
+  if (!wrap) return;
+  const msg = messages[streamingAssistantIndex] || {};
+  const content = wrap.querySelector(".msg-content");
+  if (content) content.innerHTML = renderMarkdownToHtml(msg.content || "");
+  if ((msg.thinking || "").trim()) {
+    let thinkingWrap = wrap.querySelector(".msg-thinking-wrap");
+    if (!thinkingWrap) {
+      const meta = wrap.querySelector(".msg-meta");
+      thinkingWrap = document.createElement("details");
+      thinkingWrap.className = "msg-thinking-wrap";
+      thinkingWrap.open = false;
+      const summary = document.createElement("summary");
+      summary.textContent = "模型思考（默认折叠）";
+      const thinking = document.createElement("div");
+      thinking.className = "msg-thinking";
+      thinkingWrap.appendChild(summary);
+      thinkingWrap.appendChild(thinking);
+      if (meta) meta.after(thinkingWrap);
+    }
+    const thinkingEl = wrap.querySelector(".msg-thinking");
+    if (thinkingEl) thinkingEl.textContent = msg.thinking || "";
+  }
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
 function renderMessages() {
+  const keepStreamingIndex = chatBusy ? streamingAssistantIndex : -1;
   messagesEl.innerHTML = "";
+  streamingAssistantIndex = keepStreamingIndex;
   for (let i = 0; i < messages.length; i++) {
     const m = messages[i];
     const div = document.createElement("div");
@@ -725,6 +788,8 @@ async function sendMessage(opts = {}) {
     const assistantMsg = { role: "assistant", content: "", model, thinking: "", failed: false };
     messages = sourceMessages.slice();
     messages.push(assistantMsg);
+    streamingAssistantIndex = messages.length - 1;
+    await syncMessagesToServer();
     renderMessages();
 
     const res = await fetch("/api/chat/stream", {
@@ -751,12 +816,10 @@ async function sendMessage(opts = {}) {
       buffer = parts.pop() || "";
 
       for (const part of parts) {
-        const eventMatch = part.match(/^event: ([\w_]+)/m);
-        const dataMatch = part.match(/^data: (.+)$/m);
-        if (!eventMatch || !dataMatch) continue;
-        let data;
-        try { data = JSON.parse(dataMatch[1]); } catch { continue; }
-        const evtName = eventMatch[1];
+        const parsed = parseSsePart(part);
+        if (!parsed) continue;
+        const evtName = parsed.eventName;
+        const data = parsed.data;
 
         if (evtName === "status") {
           setStatus(data.message || "Assistant is thinking...");
@@ -765,12 +828,12 @@ async function sendMessage(opts = {}) {
             setStatus(data.text || "Thinking...");
           } else {
             assistantMsg.thinking = (assistantMsg.thinking || "") + (data.text || "");
-            renderMessages();
+            updateStreamingAssistantView();
             setStatus("Received thinking stream, waiting for final answer...");
           }
         } else if (evtName === "answer_delta") {
           assistantMsg.content = (assistantMsg.content || "") + (data.text || "");
-          renderMessages();
+          updateStreamingAssistantView();
           setStatus("Streaming answer...");
         } else if (evtName === "done") {
           donePayload = data || {};
@@ -785,7 +848,9 @@ async function sendMessage(opts = {}) {
     assistantMsg.thinking = donePayload.thinking || assistantMsg.thinking || "";
     assistantMsg.interrupted = false;
     assistantMsg.failed = false;
+    streamingAssistantIndex = -1;
     renderMessages();
+    await syncMessagesToServer();
 
     if (forceSearchToggle.checked && donePayload.web_search_called) {
       setStatus("web_search used.");
@@ -808,7 +873,9 @@ async function sendMessage(opts = {}) {
             last.content += "\n\n（请求超时：10 分钟未完成。你可以点击“重试”。）";
           }
         }
+        streamingAssistantIndex = -1;
         renderMessages();
+        await syncMessagesToServer();
         setStatus("Timed out after 10 minutes.");
         return;
       } else {
@@ -816,7 +883,9 @@ async function sendMessage(opts = {}) {
         if (lastAborted && lastAborted.role === "assistant" && (lastAborted.content || "").trim()) {
           lastAborted.interrupted = true;
         }
+        streamingAssistantIndex = -1;
         renderMessages();
+        await syncMessagesToServer();
         setStatus("Output interrupted.");
         return;
       }
@@ -831,7 +900,9 @@ async function sendMessage(opts = {}) {
       } else {
         last.content += `\n\n（请求失败：${errText}）`;
       }
+      streamingAssistantIndex = -1;
       renderMessages();
+      await syncMessagesToServer();
     }
     setStatus(errText);
   } finally {
@@ -840,6 +911,7 @@ async function sendMessage(opts = {}) {
     if (stopBtn) stopBtn.style.display = "none";
     chatAbortController = null;
     chatBusy = false;
+    streamingAssistantIndex = -1;
   }
 }
 
@@ -853,6 +925,7 @@ chatForm.addEventListener("submit", async (e) => {
   messages.push({ role: "user", content: text });
   promptEl.value = "";
   renderMessages();
+  await syncMessagesToServer();
 
   await sendMessage();
 });
@@ -1089,10 +1162,12 @@ async function boot() {
   renderUploadsFromPaths([]);
   if (!ok) {
     setTrialUI(true);
-    setStatus("Trial mode: only glm-4.7-flash is available. Login to unlock uploads/RAG/translate/conversations.");
-    return;
+    setStatus("Trial mode: glm-4.7-flash only. Login to unlock uploads, RAG, and Translate.");
+  } else {
+    setTrialUI(false);
   }
   await refreshConversationList();
+  await ensureConversationSelected();
 }
 
 if (authLoginGithubBtn) {

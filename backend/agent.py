@@ -1,4 +1,5 @@
 import json
+from collections.abc import Iterator
 from typing import Any, Callable
 
 import numpy as np
@@ -612,4 +613,291 @@ def route_and_chat(
         }
 
     return {"answer": answer, "used_web_search": used_web_search_total, "thinking": thinking}
+
+
+def _emit_answer_chunks(text: str, *, chunk_size: int = 80) -> Iterator[dict[str, Any]]:
+    for i in range(0, len(text), chunk_size):
+        yield {"event": "answer_delta", "text": text[i : i + chunk_size]}
+
+
+def _emit_thinking_chunks(text: str, *, chunk_size: int = 120) -> Iterator[dict[str, Any]]:
+    for i in range(0, len(text), chunk_size):
+        yield {"event": "thinking_delta", "text": text[i : i + chunk_size], "transient": False}
+
+
+def _stream_openai_completion(
+    client: OpenAI,
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | None = "auto",
+) -> Iterator[dict[str, Any]]:
+    kwargs: dict[str, Any] = {"model": model, "messages": messages, "stream": True}
+    if tools is not None:
+        kwargs["tools"] = tools
+        if tool_choice is not None:
+            kwargs["tool_choice"] = tool_choice
+    stream = client.chat.completions.create(**kwargs)
+    answer_parts: list[str] = []
+    thinking_parts: list[str] = []
+    tool_calls_acc: dict[int, dict[str, Any]] = {}
+    for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        content = getattr(delta, "content", None) or ""
+        if content:
+            answer_parts.append(content)
+            yield {"event": "answer_delta", "text": content}
+        reasoning = getattr(delta, "reasoning_content", None) or ""
+        if reasoning:
+            thinking_parts.append(reasoning)
+            yield {"event": "thinking_delta", "text": reasoning, "transient": False}
+        for tc in getattr(delta, "tool_calls", None) or []:
+            idx = int(getattr(tc, "index", 0) or 0)
+            slot = tool_calls_acc.setdefault(
+                idx,
+                {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+            )
+            if getattr(tc, "id", None):
+                slot["id"] = tc.id
+            fn = getattr(tc, "function", None)
+            if fn is not None:
+                if getattr(fn, "name", None):
+                    slot["function"]["name"] = fn.name
+                if getattr(fn, "arguments", None):
+                    slot["function"]["arguments"] += fn.arguments or ""
+    tool_calls = [tool_calls_acc[i] for i in sorted(tool_calls_acc.keys())]
+    yield {
+        "event": "_complete",
+        "answer": "".join(answer_parts),
+        "thinking": "".join(thinking_parts),
+        "tool_calls": tool_calls,
+    }
+
+
+def _stream_openai_with_tools(
+    *,
+    client: OpenAI,
+    model: str,
+    model_messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    tool_exec: dict[str, Callable[[dict[str, Any]], Any]],
+    max_tool_rounds: int,
+) -> Iterator[dict[str, Any]]:
+    used_web_search = False
+    for _ in range(max_tool_rounds):
+        answer = ""
+        thinking = ""
+        tool_calls: list[Any] = []
+        try:
+            stream_iter = _stream_openai_completion(
+                client,
+                model=model,
+                messages=model_messages,
+                tools=tools,
+                tool_choice="auto",
+            )
+        except APIStatusError as e:
+            status = getattr(e, "status_code", None)
+            if status and int(status) >= 500:
+                stream_iter = _stream_openai_completion(
+                    client,
+                    model=model,
+                    messages=model_messages,
+                    tools=None,
+                    tool_choice=None,
+                )
+            else:
+                raise
+
+        for evt in stream_iter:
+            if evt.get("event") == "_complete":
+                answer = evt.get("answer") or ""
+                thinking = evt.get("thinking") or ""
+                tool_calls = evt.get("tool_calls") or []
+                continue
+            yield evt
+
+        if tool_calls:
+            model_messages.append(
+                {"role": "assistant", "content": answer or "", "tool_calls": tool_calls}
+            )
+            for tc in tool_calls:
+                fn = tc.get("function") or {}
+                name = fn.get("name") or ""
+                if name == "web_search":
+                    used_web_search = True
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                result = tool_exec.get(name, lambda _a: {"error": f"tool {name} not found"})(args)
+                model_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id"),
+                        "content": tool_result_as_content(result),
+                    }
+                )
+            yield {"event": "status", "message": "Running tools, preparing answer..."}
+            continue
+
+        yield {
+            "event": "_final",
+            "answer": answer,
+            "thinking": thinking,
+            "used_web_search": used_web_search,
+        }
+        return
+
+    yield {
+        "event": "_final",
+        "answer": "I couldn't produce a final answer within the tool loop.",
+        "thinking": "",
+        "used_web_search": used_web_search,
+    }
+
+
+def route_and_chat_stream(
+    *,
+    settings: Any,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, Any]],
+    tool_exec: dict[str, Callable[[dict[str, Any]], Any]],
+    force_web_search: bool,
+    project_root_abs: str,
+    max_force_retries: int = 3,
+) -> Iterator[dict[str, Any]]:
+    if model.startswith("claude-"):
+        provider = "claude"
+    elif model.startswith("gemini-"):
+        provider = "gemini"
+    elif model.startswith("grok-"):
+        provider = "grok"
+    elif model.startswith("glm-"):
+        provider = "openai_compat"
+    else:
+        provider = "openai_compat" if getattr(settings, "openai_compat_base_url", None) else "grok"
+
+    msgs = _build_provider_messages(messages)
+    used_web_search_total = False
+    answer = ""
+    thinking = ""
+
+    for attempt in range(max_force_retries + 1):
+        if attempt > 0 and force_web_search:
+            msgs = msgs + [
+                {
+                    "role": "user",
+                    "content": "Requirement: You must call `web_search` at least once before answering. Call it now, then provide the final answer.",
+                }
+            ]
+
+        if provider in ("grok", "openai_compat"):
+            if provider == "grok":
+                paths = build_grok_paths_from_settings(settings)
+                if not paths:
+                    raise RuntimeError("GROK_API_KEY is not configured.")
+                path = paths[0]
+                client = OpenAI(api_key=path["api_key"], base_url=path.get("base_url") or "https://api.x.ai/v1")
+            else:
+                if not getattr(settings, "openai_compat_api_key", None) or not getattr(
+                    settings, "openai_compat_base_url", None
+                ):
+                    raise RuntimeError("OPENAI_COMPAT_API_KEY / OPENAI_COMPAT_BASE_URL is not configured.")
+                client = OpenAI(
+                    api_key=settings.openai_compat_api_key,
+                    base_url=settings.openai_compat_base_url,
+                )
+
+            model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+            for m in msgs:
+                model_messages.append({"role": m["role"], "content": m["content"]})
+            tools = openai_tools_schema(max_search_results=settings.web_search_max_results)
+            for evt in _stream_openai_with_tools(
+                client=client,
+                model=model,
+                model_messages=model_messages,
+                tools=tools,
+                tool_exec=tool_exec,
+                max_tool_rounds=8,
+            ):
+                if evt.get("event") == "_final":
+                    answer = evt.get("answer") or ""
+                    thinking = (evt.get("thinking") or "").strip()
+                    used_web_search_total = bool(evt.get("used_web_search"))
+                    if not force_web_search or used_web_search_total:
+                        yield evt
+                        return
+                    break
+                yield evt
+
+        elif provider == "claude":
+            result = call_claude_with_tools(
+                settings=settings,
+                model=model,
+                system_prompt=system_prompt,
+                messages=msgs,
+                tool_exec=tool_exec,
+                force_web_search=force_web_search,
+                max_tool_rounds=8,
+            )
+            answer = result.get("answer") or ""
+            thinking = (result.get("thinking") or "").strip()
+            used_web_search_total = bool(result.get("used_web_search"))
+            if thinking:
+                yield from _emit_thinking_chunks(thinking)
+            if answer:
+                yield from _emit_answer_chunks(answer)
+
+        else:
+            paths = build_gemini_paths_from_settings(settings)
+            if not paths:
+                raise RuntimeError("GEMINI_API_KEY is not configured.")
+            result = run_path_first(
+                [model],
+                paths,
+                lambda mid, p: call_gemini_with_tools(
+                    settings=settings,
+                    model=mid,
+                    system_prompt=system_prompt,
+                    messages=msgs,
+                    tool_exec=tool_exec,
+                    force_web_search=force_web_search,
+                    project_root_abs=project_root_abs,
+                    max_tool_rounds=8,
+                    llm_path=p,
+                ),
+            )
+            answer = result.get("answer") or ""
+            thinking = (result.get("thinking") or "").strip()
+            used_web_search_total = bool(result.get("used_web_search"))
+            if thinking:
+                yield from _emit_thinking_chunks(thinking)
+            if answer:
+                yield from _emit_answer_chunks(answer)
+
+        if not force_web_search or used_web_search_total:
+            yield {
+                "event": "_final",
+                "answer": answer,
+                "thinking": thinking,
+                "used_web_search": used_web_search_total,
+            }
+            return
+
+    if force_web_search and not used_web_search_total:
+        answer = (
+            "Error: `force_web_search` is enabled, but the model did not call `web_search` "
+            "before answering. Try again or choose a different model."
+        )
+    yield {
+        "event": "_final",
+        "answer": answer,
+        "thinking": thinking,
+        "used_web_search": used_web_search_total,
+    }
 
