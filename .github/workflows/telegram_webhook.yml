@@ -117,6 +117,7 @@ jobs:
           MSG_FILE_ID: ${{ github.event.client_payload.file_id }}
           MSG_FILE_TYPE: ${{ github.event.client_payload.file_type }}
           MSG_FILE_NAME: ${{ github.event.client_payload.file_name }}
+          MSG_FILE_IDS: ${{ toJSON(github.event.client_payload.file_ids) }}
           MSG_LOCATION: ${{ toJSON(github.event.client_payload.location) }}
           MSG_DATE: ${{ github.event.client_payload.date }}
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
