@@ -118,11 +118,15 @@ jobs:
           PERCEPTION_TRIGGER_AT_MS: ${{ github.event.client_payload.trigger_at_ms }}
         run: |
           set +e
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python -u src/perception_layer.py --force
-          else
-            python -u src/perception_layer.py
+          git config --global --add safe.directory /__w/Calling/Calling/elaina
+          ARGS=""
+          if [ "${{ github.event.client_payload.scheduled_force }}" = "true" ]; then
+            echo "Scheduled force trigger (Cloudflare KV)."
+            ARGS="--scheduled-force"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ARGS="--force"
           fi
+          python -u src/perception_layer.py $ARGS
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
           if [ "$code" -eq 2 ]; then
@@ -181,7 +185,10 @@ jobs:
           MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
         run: |
           set -e
-          test -n "$MASTER_KEY_SOURCE"
+          if [ -z "$MASTER_KEY_SOURCE" ]; then
+            echo "MASTER_KEY_SOURCE not set; skip encrypted failure bundle."
+            exit 0
+          fi
           bundle_name="elaina_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
           enc_name="${bundle_name}.enc"
           tar -czf "/tmp/${bundle_name}" \
