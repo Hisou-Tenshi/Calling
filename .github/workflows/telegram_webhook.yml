@@ -123,6 +123,8 @@ jobs:
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          PERCEPTION_SCHEDULE_SYNC_URL: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_URL }}
+          PERCEPTION_SCHEDULE_SYNC_SECRET: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_SECRET }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -144,7 +146,7 @@ jobs:
           git config --global user.name "比那名居 天子"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          git add Tenshi.json data/tenshi_log.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/ || true
+          git add Tenshi.json data/tenshi_log.json data/perception_schedule.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/ || true
           git commit -m "天子已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do

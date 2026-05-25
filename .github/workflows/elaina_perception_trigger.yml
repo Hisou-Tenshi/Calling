@@ -113,6 +113,9 @@ jobs:
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          PERCEPTION_SCHEDULED_FORCE: ${{ github.event.client_payload.scheduled_force }}
+          PERCEPTION_SCHEDULE_NOTE: ${{ github.event.client_payload.note }}
+          PERCEPTION_TRIGGER_AT_MS: ${{ github.event.client_payload.trigger_at_ms }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -139,7 +142,7 @@ jobs:
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
           # 鲁棒地添加文件：逐个检查是否存在
-          for f in Elaina.json data/tenshi_log.json; do
+          for f in Elaina.json data/tenshi_log.json data/perception_schedule.json; do
             if [ -e "$f" ]; then
               git add "$f"
             fi

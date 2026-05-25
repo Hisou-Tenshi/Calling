@@ -122,6 +122,8 @@ jobs:
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          PERCEPTION_SCHEDULE_SYNC_URL: ${{ secrets.ELAINA_PERCEPTION_SCHEDULE_SYNC_URL || secrets.PERCEPTION_SCHEDULE_SYNC_URL }}
+          PERCEPTION_SCHEDULE_SYNC_SECRET: ${{ secrets.ELAINA_PERCEPTION_SCHEDULE_SYNC_SECRET || secrets.PERCEPTION_SCHEDULE_SYNC_SECRET }}
         run: |
           set +e
           # 检查必要的环境变量是否存在
@@ -160,7 +162,7 @@ jobs:
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
           # 鲁棒地添加文件：逐个检查是否存在，避免其中一个不存在导致整行失败
-          for f in Elaina.json data/tenshi_log.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/; do
+          for f in Elaina.json data/tenshi_log.json data/perception_schedule.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/; do
             if [ -e "$f" ]; then
               git add "$f"
             fi

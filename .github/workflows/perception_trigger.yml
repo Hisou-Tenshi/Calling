@@ -115,6 +115,9 @@ jobs:
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          PERCEPTION_SCHEDULED_FORCE: ${{ github.event.client_payload.scheduled_force }}
+          PERCEPTION_SCHEDULE_NOTE: ${{ github.event.client_payload.note }}
+          PERCEPTION_TRIGGER_AT_MS: ${{ github.event.client_payload.trigger_at_ms }}
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -140,7 +143,7 @@ jobs:
           git config --global user.name "比那名居 天子"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          git add Tenshi.json data/tenshi_log.json >/dev/null 2>&1 || true
+          git add Tenshi.json data/tenshi_log.json data/perception_schedule.json >/dev/null 2>&1 || true
           git commit -m "天子感知层：世界观测日志 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do
