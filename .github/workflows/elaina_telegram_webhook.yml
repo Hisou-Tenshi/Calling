@@ -137,16 +137,11 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python -u src/telegram_tenshi_logger.py --debug --force_reply > /tmp/elaina_runtime.log 2>&1
+            python -u src/telegram_tenshi_logger.py --debug --force_reply
           else
-            python -u src/telegram_tenshi_logger.py > /tmp/elaina_runtime.log 2>&1
+            python -u src/telegram_tenshi_logger.py
           fi
           code=$?
-          
-          # 无论成功失败，都尝试打印最后 100 行日志，方便在 Action 界面直接排查
-          echo "--- Last 100 lines of runtime log ---"
-          tail -n 100 /tmp/elaina_runtime.log
-          echo "--- End of runtime log ---"
 
           if [ $code -ne 0 ]; then
             exit $code
@@ -209,13 +204,12 @@ jobs:
             data/tenshi_log.json \
             data/knowledge_base.json \
             logs/debug.log \
-            logs/llm_trace.jsonl \
-            /tmp/elaina_runtime.log 2>/dev/null || true
+            logs/llm_trace.jsonl 2>/dev/null || true
           openssl enc -aes-256-cbc -pbkdf2 -salt \
             -in "/tmp/${bundle_name}" \
             -out "${GITHUB_WORKSPACE}/${enc_name}" \
             -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
-          rm -f "/tmp/${bundle_name}" "/tmp/elaina_runtime.log"
+          rm -f "/tmp/${bundle_name}"
           echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
 
       - name: Push encrypted failure bundle to Elaina
@@ -244,6 +238,3 @@ jobs:
           if-no-files-found: error
           path: ${{ steps.build_failure_bundle.outputs.enc_file }}
 
-      - name: Cleanup transient runtime log
-        if: always()
-        run: rm -f /tmp/elaina_runtime.log

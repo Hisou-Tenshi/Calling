@@ -121,9 +121,9 @@ jobs:
         run: |
           set +e
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            python src/perception_layer.py --force > /tmp/tenshi_runtime.log 2>&1
+            python -u src/perception_layer.py --force
           else
-            python src/perception_layer.py > /tmp/tenshi_runtime.log 2>&1
+            python -u src/perception_layer.py
           fi
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
@@ -184,13 +184,12 @@ jobs:
             data/tenshi_log.json \
             data/knowledge_base.json \
             logs/debug.log \
-            logs/llm_trace.jsonl \
-            /tmp/tenshi_runtime.log 2>/dev/null || true
+            logs/llm_trace.jsonl 2>/dev/null || true
           openssl enc -aes-256-cbc -pbkdf2 -salt \
             -in "/tmp/${bundle_name}" \
             -out "${GITHUB_WORKSPACE}/${enc_name}" \
             -pass pass:"${MASTER_KEY_SOURCE}" >/dev/null 2>&1
-          rm -f "/tmp/${bundle_name}" "/tmp/tenshi_runtime.log"
+          rm -f "/tmp/${bundle_name}"
           echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
 
       - name: Push encrypted failure bundle to Tenshi
@@ -220,7 +219,4 @@ jobs:
           if-no-files-found: error
           path: ${{ steps.build_failure_bundle.outputs.enc_file }}
 
-      - name: Cleanup transient runtime log
-        if: always()
-        run: rm -f /tmp/tenshi_runtime.log
 
