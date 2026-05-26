@@ -105,6 +105,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TG_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}

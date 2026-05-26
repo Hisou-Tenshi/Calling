@@ -100,6 +100,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
           REPO_NAME: ${{ secrets.GH_REPO }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
