@@ -1,0 +1,92 @@
+name: Runtime Log Cleanup (Calling)
+
+on:
+  schedule:
+    # UTC 18:05 — 在每日总结（17:11 UTC）之后执行；纯文件维护，不调用模型
+    - cron: '5 18 * * *'
+  workflow_dispatch:
+
+# 与回复/总结均独立；仅操作 logs/ 与 downloads/
+concurrency:
+  group: tenshi-bot-log-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Tenshi repo
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.GH_REPO }}
+          token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: tenshi
+
+      - name: Get Date
+        id: date
+        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Archive and clean runtime logs
+        working-directory: tenshi
+        run: |
+          set -e
+          mkdir -p data logs downloads
+
+          DATE="${{ steps.date.outputs.date }}"
+          mkdir -p "logs/archive/${DATE}"
+
+          # 仅归档回复侧运行时日志（不碰 summary_update / summary_llm_trace）
+          for f in logs/debug.log logs/llm_trace.jsonl; do
+            if [ -f "$f" ]; then
+              cp -f "$f" "logs/archive/${DATE}/" || true
+            fi
+          done
+
+          # 清理过期归档（只保留近 3 天）
+          find logs/archive -mindepth 1 -maxdepth 1 -type d -name '????-??-??' | sort | head -n -3 | xargs -r rm -rf
+
+          # 清空回复侧运行时日志与 downloads（总结产物保留）
+          rm -f logs/debug.log logs/llm_trace.jsonl || true
+          touch logs/debug.log logs/llm_trace.jsonl
+          rm -rf downloads/* || true
+          touch downloads/.gitkeep
+          touch logs/.gitkeep
+
+      - name: Commit and Push (logs/downloads only)
+        working-directory: tenshi
+        run: |
+          git config --global --add safe.directory "*"
+          git config --global user.name "比那名居 天子"
+          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+
+          git add logs/ downloads/ >/dev/null 2>&1 || true
+
+          if git commit -m "天子卷宗整理：归档运行时日志 [skip ci]" >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              if git push origin main >/dev/null 2>&1; then
+                exit 0
+              fi
+              git fetch origin main >/dev/null 2>&1
+              if ! git rebase origin/main >/dev/null 2>&1; then
+                if [ -n "$(git ls-files -u)" ]; then
+                  git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
+                    if [ -e "$cf" ]; then
+                      git checkout --ours -- "$cf" >/dev/null 2>&1 || true
+                      git add -- "$cf" >/dev/null 2>&1 || true
+                    fi
+                  done
+                  git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
+                else
+                  git rebase --abort >/dev/null 2>&1 || true
+                fi
+              fi
+            done
+            git push origin main >/dev/null 2>&1
+          else
+            echo "No changes to commit, skipping push."
+          fi

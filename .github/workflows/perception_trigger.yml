@@ -5,9 +5,9 @@ on:
     types: [perception_trigger]
   workflow_dispatch:
 
-# 与 webhook 共享同一个并发组，确保不同时运行/排队
+# 与 webhook 共享回复并发组
 concurrency:
-  group: tenshi-bot
+  group: tenshi-bot-reply
   cancel-in-progress: false
 
 permissions:

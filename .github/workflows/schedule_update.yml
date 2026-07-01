@@ -2,15 +2,12 @@ name: Scheduled Update (Calling)
 
 on:
   schedule:
-    - cron: '22 2 * * *'
+    - cron: '11 17 * * *'
   workflow_dispatch:
 
-# 与 perception_trigger / telegram_webhook 共享同一并发组；
-# cancel-in-progress: false → 排队而不是取消，避免每日更新被抢占。
-# 但每日更新本身可能跑 10~20 分钟，若队列里已有一个 schedule 在跑，
-# 后续手动触发也会等待而不是重复运行。
+# 总结专用并发组：与回复/感知（tenshi-bot-reply）并行，互不排队阻塞。
 concurrency:
-  group: tenshi-bot
+  group: tenshi-bot-summary
   cancel-in-progress: false
 
 permissions:
@@ -59,6 +56,8 @@ jobs:
           LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
           DAILY_SUMMARY_CUTOFF_HOUR: "4"
           DAILY_SUMMARY_SILENCE_THRESHOLD_SECONDS: "10800"
+          LOG_UPDATE_LLM_MAX_ATTEMPTS: "8"
+          LOG_UPDATE_LLM_MAX_ATTEMPTS_PER_MODEL: "5"
         run: |
           python -u src/log_update.py
 
@@ -71,32 +70,21 @@ jobs:
           git config --global user.name "比那名居 天子"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          # 确保目录存在
-          mkdir -p data logs downloads
+          mkdir -p data logs
 
-          # ── 归档当日日志到 logs/archive/<DATE>/ ──────────────────────────────
-          DATE="${{ steps.date.outputs.date }}"
-          mkdir -p "logs/archive/${DATE}"
+          # 仅提交总结/记忆产物；不触碰 tenshi_log、回复侧 debug/llm_trace、downloads
+          git add \
+            data/knowledge_base.json \
+            data/knowledge_base_events/ \
+            data/knowledge_base_shared_experience/ \
+            data/summary_cursor.json \
+            data/tenshi_memory.db \
+            data/embedding_cache.pkl \
+            logs/summary_update.log \
+            logs/summary_llm_trace.jsonl \
+            >/dev/null 2>&1 || true
 
-          # 用 find + cp，规避 busybox 不支持 read -d '' 的问题
-          # 只拷贝 logs/ 根目录下的文件（不递归进 archive/）
-          find logs -maxdepth 1 -type f -exec cp -f {} "logs/archive/${DATE}/" \; || true
-
-          # ── 清理过期归档（只保留近 3 天）────────────────────────────────────
-          # 目录名格式 YYYY-MM-DD，字典序即时间序，sort 后 head -n -3 删除最旧的
-          find logs/archive -mindepth 1 -maxdepth 1 -type d -name '????-??-??' | sort | head -n -3 | xargs -r rm -rf
-
-          # ── 清理 logs/ 根目录的运行时文件（归档后才删）────────────────────
-          find logs -mindepth 1 -maxdepth 1 ! -name 'archive' -exec rm -rf -- {} + || true
-          mkdir -p downloads logs
-          touch downloads/.gitkeep
-          touch logs/.gitkeep
-
-          rm -rf downloads/* || true
-
-          git add data/ logs/ downloads/ >/dev/null 2>&1 || true
-
-          if git commit -m "天子例行巡狩：记忆更新与卷宗整理 [skip ci]" >/dev/null 2>&1; then
+          if git commit -m "天子例行巡狩：记忆更新 [skip ci]" >/dev/null 2>&1; then
             # ── 防冲突推送：最多重试 3 次 ────────────────────────────────────
             for attempt in 1 2 3; do
               if git push origin main >/dev/null 2>&1; then
@@ -188,8 +176,8 @@ jobs:
           tar -czf "/tmp/${bundle_name}" \
             data/tenshi_log.json \
             data/knowledge_base.json \
-            logs/debug.log \
-            logs/llm_trace.jsonl 2>/dev/null || true
+            logs/summary_update.log \
+            logs/summary_llm_trace.jsonl 2>/dev/null || true
           openssl enc -aes-256-cbc -pbkdf2 -salt \
             -in "/tmp/${bundle_name}" \
             -out "${GITHUB_WORKSPACE}/${enc_name}" \
