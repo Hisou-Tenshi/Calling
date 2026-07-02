@@ -38,7 +38,7 @@ jobs:
           GH_TOKEN_TENSHI: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
         run: |
           python - <<'PY'
-          import json, os, time, urllib.request
+          import json, os, time, urllib.request, datetime
 
           run_id = os.environ.get("GITHUB_RUN_ID", "")
           calling_repo = os.environ.get("CALLING_REPO", "")
@@ -49,7 +49,16 @@ jobs:
 
           perception_workflow_path = ".github/workflows/perception_trigger.yml"
 
-          def has_perception_run(repo_full: str, token: str, status: str) -> bool:
+          def _parse_iso8601(ts: str):
+            if not ts:
+              return None
+            try:
+              # GitHub timestamps are usually like: 2026-07-02T03:15:42Z
+              return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+              return None
+
+          def has_perception_run(repo_full: str, token: str) -> bool:
             if not repo_full or not token:
               return False
             owner, name = repo_full.split("/", 1)
@@ -58,19 +67,32 @@ jobs:
               "Authorization": f"token {token}",
             }
             try:
+              # Only "in_progress" can truly conflict with current webhook execution.
+              # "queued" is frequently noisy (cross-workflow backlogs) and can cause false blocking.
               url = (
                 f"https://api.github.com/repos/{owner}/{name}"
-                f"/actions/runs?per_page=100&branch={branch}&status={status}"
+                f"/actions/runs?per_page=100&branch={branch}&status=in_progress"
               )
               req = urllib.request.Request(url, headers=headers)
               with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.load(resp)
+              now_utc = datetime.datetime.now(datetime.timezone.utc)
               for r in data.get("workflow_runs", []) or []:
                 rid = r.get("id")
                 if run_id and str(rid) == str(run_id):
                   continue
                 path = (r.get("path") or "")
-                if path == perception_workflow_path or path.endswith("/perception_trigger.yml"):
+                event = (r.get("event") or "")
+                if not (path == perception_workflow_path or path.endswith("/perception_trigger.yml")):
+                  continue
+                # Extra guard: only treat actual perception dispatch/manual runs as blockers.
+                if event not in ("repository_dispatch", "workflow_dispatch"):
+                  continue
+                # Ignore stale "in_progress" records that were not updated recently.
+                updated_at = _parse_iso8601(r.get("updated_at") or "")
+                if updated_at is None:
+                  return True
+                if (now_utc - updated_at).total_seconds() <= 180:
                   return True
               return False
             except Exception:
@@ -79,10 +101,8 @@ jobs:
           deadline_s = time.time() + 300
           while time.time() < deadline_s:
             if (
-              has_perception_run(calling_repo, token_calling, "in_progress")
-              or has_perception_run(calling_repo, token_calling, "queued")
-              or has_perception_run(tenshi_repo, token_tenshi, "in_progress")
-              or has_perception_run(tenshi_repo, token_tenshi, "queued")
+              has_perception_run(calling_repo, token_calling)
+              or has_perception_run(tenshi_repo, token_tenshi)
             ):
               time.sleep(10)
               continue
