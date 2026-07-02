@@ -27,8 +27,23 @@ jobs:
         with:
           repository: ${{ secrets.GH_REPO }}
           token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
-          fetch-depth: 0
+          fetch-depth: 1
           path: tenshi
+          # Reply path only: skip data/archive, secure_failures, logs/archive, etc.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            src/
+            Tenshi.json
+            data/tenshi_log.json
+            data/knowledge_base.json
+            data/perception_schedule.json
+            data/image_analysis_cache.json
+            data/embedding_cache.pkl
+            data/tenshi_memory.db
+            data/world_history.json
+            data/knowledge_base_events/
+            downloads/.gitkeep
+            logs/.gitkeep
 
       - name: "Guard: wait if perception is running"
         env:
