@@ -537,8 +537,20 @@ def create_app() -> FastAPI:
             "grok-4.20-0309-reasoning",
             "grok-4.20-0309-non-reasoning",
         ]
+        openrouter_models = [
+            settings.openrouter_model,
+        ]
         # Keep it flat for UI: one selector can accept any supported model id.
-        options = sorted(set([settings.trial_model] + claude_models + gemini_models + grok_models + [settings.default_chat_model]))
+        options = sorted(
+            set(
+                [settings.trial_model]
+                + claude_models
+                + gemini_models
+                + openrouter_models
+                + grok_models
+                + [settings.default_chat_model]
+            )
+        )
         # Default model: always trial model (safety against accidental paid calls)
         return {"default": settings.trial_model, "options": options, "trial_only": False}
 

@@ -106,6 +106,9 @@ jobs:
           FIREWORKS_DEEPSEEK_V4_PRO_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_PRO_MODEL }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
           CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}

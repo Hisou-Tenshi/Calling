@@ -1079,24 +1079,43 @@ def _call_gemini(messages: list[dict], settings, model: str) -> str:
 
 
 def _call_openai_compat(messages: list[dict], settings, model: str) -> str:
-
     from openai import OpenAI
 
-    base_url = getattr(settings, "grok_base_url", "https://api.x.ai/v1")
+    slot_attempts: list[tuple[str, str]] = []
+    if getattr(settings, "openrouter_api_key", None):
+        slot_attempts.append(
+            (
+                getattr(settings, "openrouter_base_url", "https://openrouter.ai/api/v1"),
+                settings.openrouter_api_key,
+            )
+        )
+    if getattr(settings, "grok_api_key", None):
+        slot_attempts.append(
+            (
+                getattr(settings, "grok_base_url", "https://api.x.ai/v1"),
+                settings.grok_api_key,
+            )
+        )
 
-    client = OpenAI(api_key=settings.grok_api_key or "", base_url=base_url)
-
-    resp = client.chat.completions.create(
-
-        model=model,
-
-        messages=messages,
-
-        max_tokens=8192,
-
+    last_err: Exception | None = None
+    slot_model = (
+        getattr(settings, "openrouter_model", model)
+        if getattr(settings, "openrouter_api_key", None)
+        else model
     )
-
-    return resp.choices[0].message.content or ""
+    for base_url, api_key in slot_attempts:
+        client = OpenAI(api_key=api_key or "", base_url=base_url)
+        try:
+            resp = client.chat.completions.create(
+                model=slot_model if "openrouter.ai" in base_url else model,
+                messages=messages,
+                max_tokens=8192,
+            )
+            return resp.choices[0].message.content or ""
+        except Exception as e:
+            last_err = e
+            continue
+    raise last_err or RuntimeError("OpenRouter/Grok translate call failed")
 
 
 

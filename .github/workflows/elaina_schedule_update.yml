@@ -51,6 +51,9 @@ jobs:
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}

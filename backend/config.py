@@ -15,6 +15,9 @@ class Settings:
     gemini_api_key: str | None
     claude_api_key: str | None
     grok_api_key: str | None
+    openrouter_api_key: str | None
+    openrouter_base_url: str | None
+    openrouter_model: str
     tavily_key: str | None
 
     # Optional Claude proxies (same env var names as Tenshi; may be empty)
@@ -105,6 +108,11 @@ def load_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
         claude_api_key=os.getenv("CLAUDE_API_KEY") or None,
         grok_api_key=os.getenv("GROK_API_KEY") or None,
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY") or None,
+        openrouter_base_url=os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1",
+        openrouter_model=(
+            os.getenv("OPENROUTER_MODEL") or "deepseek/deepseek-r1-distill-llama-70b"
+        ).strip(),
         tavily_key=os.getenv("TAVILY_KEY") or None,
         claude_proxy_key=os.getenv("CLAUDE_PROXY_KEY") or None,
         claude_proxy_base_url=os.getenv("CLAUDE_PROXY_BASE_URL") or None,

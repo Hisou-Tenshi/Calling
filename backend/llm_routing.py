@@ -80,6 +80,42 @@ def build_grok_paths_from_settings(settings: Any) -> list[dict[str, Any]]:
     return build_llm_paths(settings.grok_api_key, base_url, build_claude_proxy_configs(settings))
 
 
+def build_openrouter_paths_from_settings(settings: Any) -> list[dict[str, Any]]:
+    return build_llm_paths(
+        getattr(settings, "openrouter_api_key", None),
+        getattr(settings, "openrouter_base_url", "https://openrouter.ai/api/v1"),
+        None,
+        official_name="OpenRouter",
+    )
+
+
+def run_grok_slot_path_first(
+    openrouter_model: str,
+    grok_model_ids: list[str],
+    settings: Any,
+    invoke: Callable[[str, dict[str, Any]], T],
+    *,
+    max_attempts: int = 1,
+) -> T:
+    """OpenRouter 主路 + Grok 容灾。"""
+    last_err: Exception | None = None
+    or_paths = build_openrouter_paths_from_settings(settings)
+    if or_paths and openrouter_model:
+        try:
+            return run_path_first([openrouter_model], or_paths, invoke, max_attempts=max_attempts)
+        except Exception as e:
+            last_err = e
+
+    grok_paths = build_grok_paths_from_settings(settings)
+    if grok_paths and grok_model_ids:
+        try:
+            return run_path_first(grok_model_ids, grok_paths, invoke, max_attempts=max_attempts)
+        except Exception as e:
+            last_err = e
+
+    raise last_err or RuntimeError("OpenRouter/Grok slot failed")
+
+
 def run_path_first(
     model_ids: list[str],
     paths: list[dict[str, Any]],

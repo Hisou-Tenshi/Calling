@@ -19,6 +19,8 @@ from backend.llm_routing import (
     build_claude_proxy_configs,
     build_gemini_paths_from_settings,
     build_grok_paths_from_settings,
+    build_openrouter_paths_from_settings,
+    run_grok_slot_path_first,
     run_path_first,
 )
 from backend.tools import read_file_tool, web_search_tool
@@ -142,6 +144,44 @@ def _build_provider_messages(messages: list[dict[str, Any]]) -> list[dict[str, A
         content = m.get("content") or ""
         out.append({"role": role, "content": content})
     return out
+
+
+def _is_grok_slot_model(model: str, settings: Any) -> bool:
+    mid = (model or "").strip().lower()
+    if mid.startswith("grok-"):
+        return True
+    or_model = (getattr(settings, "openrouter_model", "") or "").strip().lower()
+    return "/" in mid or (or_model and mid == or_model)
+
+
+def _grok_slot_invoke(
+    settings: Any,
+    *,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, Any]],
+    tool_exec: dict[str, Callable[[dict[str, Any]], Any]],
+    force_web_search: bool,
+):
+    def _invoke(mid: str, path: dict[str, Any]) -> dict[str, Any]:
+        return call_grok_with_tools(
+            settings=settings,
+            model=mid,
+            system_prompt=system_prompt,
+            messages=messages,
+            tool_exec=tool_exec,
+            force_web_search=force_web_search,
+            llm_path=path,
+        )
+
+    openrouter_model = getattr(settings, "openrouter_model", "") or "deepseek/deepseek-r1-distill-llama-70b"
+    grok_models = [model] if model.startswith("grok-") else ["grok-4.3"]
+    return run_grok_slot_path_first(
+        openrouter_model,
+        grok_models,
+        settings,
+        _invoke,
+    )
 
 
 def call_grok_with_tools(
@@ -518,7 +558,7 @@ def route_and_chat(
         provider = "claude"
     elif model.startswith("gemini-"):
         provider = "gemini"
-    elif model.startswith("grok-"):
+    elif model.startswith("grok-") or _is_grok_slot_model(model, settings):
         provider = "grok"
     elif model.startswith("glm-"):
         provider = "openai_compat"
@@ -541,21 +581,15 @@ def route_and_chat(
             ]
 
         if provider == "grok":
-            paths = build_grok_paths_from_settings(settings)
-            if not paths:
-                raise RuntimeError("GROK_API_KEY is not configured.")
-            r = run_path_first(
-                [model],
-                paths,
-                lambda mid, p: call_grok_with_tools(
-                    settings=settings,
-                    model=mid,
-                    system_prompt=system_prompt,
-                    messages=msgs,
-                    tool_exec=tool_exec,
-                    force_web_search=force_web_search,
-                    llm_path=p,
-                ),
+            if not getattr(settings, "openrouter_api_key", None) and not getattr(settings, "grok_api_key", None):
+                raise RuntimeError("OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
+            r = _grok_slot_invoke(
+                settings,
+                model=model,
+                system_prompt=system_prompt,
+                messages=msgs,
+                tool_exec=tool_exec,
+                force_web_search=force_web_search,
             )
         elif provider == "openai_compat":
             r = call_openai_compat_with_tools(
@@ -775,7 +809,7 @@ def route_and_chat_stream(
         provider = "claude"
     elif model.startswith("gemini-"):
         provider = "gemini"
-    elif model.startswith("grok-"):
+    elif model.startswith("grok-") or _is_grok_slot_model(model, settings):
         provider = "grok"
     elif model.startswith("glm-"):
         provider = "openai_compat"
@@ -798,12 +832,49 @@ def route_and_chat_stream(
 
         if provider in ("grok", "openai_compat"):
             if provider == "grok":
-                paths = build_grok_paths_from_settings(settings)
-                if not paths:
-                    raise RuntimeError("GROK_API_KEY is not configured.")
-                path = paths[0]
-                client = OpenAI(api_key=path["api_key"], base_url=path.get("base_url") or "https://api.x.ai/v1")
-            else:
+                grok_model = model if model.startswith("grok-") else "grok-4.3"
+                slot_attempts: list[tuple[dict[str, Any], str]] = []
+                for path in build_openrouter_paths_from_settings(settings):
+                    slot_attempts.append((path, getattr(settings, "openrouter_model", model)))
+                for path in build_grok_paths_from_settings(settings):
+                    slot_attempts.append((path, grok_model))
+                if not slot_attempts:
+                    raise RuntimeError("OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
+                streamed = False
+                for path, slot_model in slot_attempts:
+                    client = OpenAI(
+                        api_key=path["api_key"],
+                        base_url=path.get("base_url") or "https://api.x.ai/v1",
+                    )
+                    model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+                    for m in msgs:
+                        model_messages.append({"role": m["role"], "content": m["content"]})
+                    tools = openai_tools_schema(max_search_results=settings.web_search_max_results)
+                    try:
+                        for evt in _stream_openai_with_tools(
+                            client=client,
+                            model=slot_model,
+                            model_messages=model_messages,
+                            tools=tools,
+                            tool_exec=tool_exec,
+                            max_tool_rounds=8,
+                        ):
+                            if evt.get("event") == "_final":
+                                answer = evt.get("answer") or ""
+                                thinking = (evt.get("thinking") or "").strip()
+                                used_web_search_total = bool(evt.get("used_web_search"))
+                                if not force_web_search or used_web_search_total:
+                                    yield evt
+                                    return
+                                break
+                            yield evt
+                        streamed = True
+                        break
+                    except Exception:
+                        continue
+                if streamed:
+                    continue
+            elif provider == "openai_compat":
                 if not getattr(settings, "openai_compat_api_key", None) or not getattr(
                     settings, "openai_compat_base_url", None
                 ):
@@ -812,28 +883,27 @@ def route_and_chat_stream(
                     api_key=settings.openai_compat_api_key,
                     base_url=settings.openai_compat_base_url,
                 )
-
-            model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-            for m in msgs:
-                model_messages.append({"role": m["role"], "content": m["content"]})
-            tools = openai_tools_schema(max_search_results=settings.web_search_max_results)
-            for evt in _stream_openai_with_tools(
-                client=client,
-                model=model,
-                model_messages=model_messages,
-                tools=tools,
-                tool_exec=tool_exec,
-                max_tool_rounds=8,
-            ):
-                if evt.get("event") == "_final":
-                    answer = evt.get("answer") or ""
-                    thinking = (evt.get("thinking") or "").strip()
-                    used_web_search_total = bool(evt.get("used_web_search"))
-                    if not force_web_search or used_web_search_total:
-                        yield evt
-                        return
-                    break
-                yield evt
+                model_messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+                for m in msgs:
+                    model_messages.append({"role": m["role"], "content": m["content"]})
+                tools = openai_tools_schema(max_search_results=settings.web_search_max_results)
+                for evt in _stream_openai_with_tools(
+                    client=client,
+                    model=model,
+                    model_messages=model_messages,
+                    tools=tools,
+                    tool_exec=tool_exec,
+                    max_tool_rounds=8,
+                ):
+                    if evt.get("event") == "_final":
+                        answer = evt.get("answer") or ""
+                        thinking = (evt.get("thinking") or "").strip()
+                        used_web_search_total = bool(evt.get("used_web_search"))
+                        if not force_web_search or used_web_search_total:
+                            yield evt
+                            return
+                        break
+                    yield evt
 
         elif provider == "claude":
             result = call_claude_with_tools(
