@@ -340,10 +340,10 @@ def call_openai_compat_with_tools(
         "thinking": "",
     }
 
-def _build_claude_clients(settings: Any) -> list[tuple[Anthropic, str]]:
-    """Claude：代理优先，官方最后。"""
+def _build_claude_clients(settings: Any, model: str) -> list[tuple[Anthropic, str]]:
+    """Claude：按模型选代理1档位，再 Proxy2，官方最后。"""
     clients: list[tuple[Anthropic, str]] = []
-    for proxy in build_claude_proxy_configs(settings):
+    for proxy in build_claude_proxy_configs(settings, model_id=model):
         clients.append(
             (Anthropic(api_key=proxy["api_key"], base_url=proxy["base_url"]), proxy["name"])
         )
@@ -362,7 +362,7 @@ def call_claude_with_tools(
     force_web_search: bool,
     max_tool_rounds: int = 8,
 ) -> dict[str, Any]:
-    clients = _build_claude_clients(settings)
+    clients = _build_claude_clients(settings, model)
 
     if not clients:
         raise RuntimeError("No Claude API client configured (CLAUDE_API_KEY and/or CLAUDE_PROXY_* missing).")

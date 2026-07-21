@@ -21,7 +21,11 @@ class Settings:
     tavily_key: str | None
 
     # Optional Claude proxies (same env var names as Tenshi; may be empty)
+    # Proxy1：同一 BASE_URL 下 Base / Prime / Max；claude_proxy_key 为 Base 旧别名
     claude_proxy_key: str | None
+    claude_proxy_key_base: str | None
+    claude_proxy_key_prime: str | None
+    claude_proxy_key_max: str | None
     claude_proxy_base_url: str | None
     claude_proxy_key_2: str | None
     claude_proxy_base_url_2: str | None
@@ -115,6 +119,9 @@ def load_settings() -> Settings:
         ).strip(),
         tavily_key=os.getenv("TAVILY_KEY") or None,
         claude_proxy_key=os.getenv("CLAUDE_PROXY_KEY") or None,
+        claude_proxy_key_base=os.getenv("CLAUDE_PROXY_KEY_BASE") or None,
+        claude_proxy_key_prime=os.getenv("CLAUDE_PROXY_KEY_PRIME") or None,
+        claude_proxy_key_max=os.getenv("CLAUDE_PROXY_KEY_MAX") or None,
         claude_proxy_base_url=os.getenv("CLAUDE_PROXY_BASE_URL") or None,
         claude_proxy_key_2=os.getenv("CLAUDE_PROXY_KEY_2") or None,
         claude_proxy_base_url_2=os.getenv("CLAUDE_PROXY_BASE_URL_2") or None,

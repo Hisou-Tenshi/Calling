@@ -123,7 +123,9 @@ jobs:
           FIREWORKS_BASE_URL: ${{ secrets.FIREWORKS_BASE_URL }}
           FIREWORKS_DEEPSEEK_V4_PRO_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_PRO_MODEL }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
-          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
+          CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
+          CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}

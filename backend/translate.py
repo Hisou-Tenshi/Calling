@@ -971,7 +971,7 @@ def _call_claude(messages: list[dict], settings, model: str) -> str:
     from backend.llm_routing import build_claude_proxy_configs
 
     clients: list[tuple[Any, str]] = []
-    for proxy in build_claude_proxy_configs(settings):
+    for proxy in build_claude_proxy_configs(settings, model_id=model):
         clients.append(
             (Anthropic(api_key=proxy["api_key"], base_url=proxy["base_url"]), proxy["name"])
         )
