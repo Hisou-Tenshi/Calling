@@ -6,6 +6,7 @@ import requests
 from duckduckgo_search import DDGS
 
 from backend.util import safe_join_under_root
+from backend.fetch_tools import fetch_url_tool
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="duckduckgo_search")
 
@@ -60,6 +61,15 @@ def web_search_tool(query: str, *, max_results: int = 5) -> dict[str, Any]:
             results.append({"title": title, "href": href, "body": body})
 
     return {"query": query, "results": results}
+
+
+def fetch_url_tool_entry(
+    url: str,
+    *,
+    output_format: str = "auto",
+    max_chars: int | None = None,
+) -> dict[str, Any]:
+    return fetch_url_tool(url, output_format=output_format, max_chars=max_chars)
 
 
 def project_tree(root_abs: str, *, max_depth: int = 3, max_entries: int = 220) -> dict[str, Any]:

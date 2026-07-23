@@ -23,7 +23,7 @@ from backend.llm_routing import (
     run_grok_slot_path_first,
     run_path_first,
 )
-from backend.tools import read_file_tool, web_search_tool
+from backend.tools import fetch_url_tool_entry, read_file_tool, web_search_tool
 
 
 def tool_result_as_content(result_obj: Any) -> str:
@@ -45,7 +45,18 @@ def make_tool_exec(project_root_abs: str) -> dict[str, Callable[[dict[str, Any]]
             relative_path=args.get("path", ""),
         )
 
-    return {"web_search": exec_web_search, "read_file": exec_read_file}
+    def exec_fetch_url(args: dict[str, Any]) -> Any:
+        return fetch_url_tool_entry(
+            args.get("url", ""),
+            output_format=args.get("output_format") or args.get("format") or "auto",
+            max_chars=args.get("max_chars"),
+        )
+
+    return {
+        "web_search": exec_web_search,
+        "read_file": exec_read_file,
+        "fetch_url": exec_fetch_url,
+    }
 
 
 def openai_tools_schema(*, max_search_results: int) -> list[dict[str, Any]]:
@@ -82,6 +93,34 @@ def openai_tools_schema(*, max_search_results: int) -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "fetch_url",
+                "description": (
+                    "Fetch an HTTP(S) URL and return html/md/txt/json as text. "
+                    "Rate-limited for CI; GitHub URLs use GITHUB_TOKEN when set."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "HTTP or HTTPS URL."},
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["auto", "html", "md", "txt", "json"],
+                            "description": "Output format (default auto).",
+                        },
+                        "max_chars": {
+                            "type": "integer",
+                            "description": "Max characters to return.",
+                            "minimum": 500,
+                            "maximum": 50000,
+                        },
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
     ]
 
 
@@ -114,6 +153,22 @@ def claude_tools_schema(*, max_search_results: int) -> list[dict[str, Any]]:
                 "required": ["path"],
             },
         },
+        {
+            "name": "fetch_url",
+            "description": "Fetch HTTP(S) URL content as text (html/md/txt/json). GitHub auth via GITHUB_TOKEN.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "HTTP or HTTPS URL."},
+                    "output_format": {
+                        "type": "string",
+                        "enum": ["auto", "html", "md", "txt", "json"],
+                    },
+                    "max_chars": {"type": "integer", "minimum": 500, "maximum": 50000},
+                },
+                "required": ["url"],
+            },
+        },
     ]
 
 
@@ -125,14 +180,18 @@ def gemini_tools_wrappers(*, project_root_abs: str):
     def read_file(path: str) -> dict[str, Any]:
         return read_file_tool(project_root_abs=project_root_abs, relative_path=path)
 
-    # Docstrings help the tool declaration
+    def fetch_url(url: str, output_format: str = "auto", max_chars: int = 28000) -> dict[str, Any]:
+        return fetch_url_tool_entry(url, output_format=output_format, max_chars=max_chars)
+
     web_search.__doc__ = "Search the public web. Prefer TAVILY; fall back to DuckDuckGo."
     read_file.__doc__ = "Read a file inside the Calling project root. Use '__TREE__' to get a project tree."
+    fetch_url.__doc__ = "Fetch HTTP(S) URL as text (html/md/txt/json)."
 
     web_search.__name__ = "web_search"
     read_file.__name__ = "read_file"
+    fetch_url.__name__ = "fetch_url"
 
-    return [web_search, read_file]
+    return [web_search, read_file, fetch_url]
 
 
 def _build_provider_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
