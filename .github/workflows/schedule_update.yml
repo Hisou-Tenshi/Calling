@@ -1,8 +1,11 @@
 name: Scheduled Update (Calling)
 
+# Tenshi 每日总结：执行窗口为本地 22:00–08:00（默认 TIMEZONE_OFFSET=9 → JST）。
+# 窗口内每小时尝试一次；log_update 若判定「窗口外 / 最近 45 分钟仍有对话」会跳过且不推进 cursor。
+# UTC 13:11–22:11 = JST 22:11–07:11（08:00 为窗口上界，不调度整点 08:00）。
 on:
   schedule:
-    - cron: '11 17 * * *'
+    - cron: '11 13-22 * * *'
   workflow_dispatch:
 
 # 总结专用并发组：与回复/感知（tenshi-bot-reply）并行，互不排队阻塞。
@@ -64,14 +67,18 @@ jobs:
           LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
           DAILY_SUMMARY_CUTOFF_HOUR: "4"
           DAILY_SUMMARY_SILENCE_THRESHOLD_SECONDS: "10800"
+          SUMMARY_EXECUTION_GUARD_ENABLED: "1"
+          SUMMARY_EXECUTION_WINDOWS: "22:00-08:00"
+          SUMMARY_ACTIVITY_IDLE_SECONDS: "2700"
+          SUMMARY_EXECUTION_CATCHUP_HOURS: "10"
           LOG_UPDATE_LLM_MAX_ATTEMPTS: "8"
           LOG_UPDATE_LLM_MAX_ATTEMPTS_PER_MODEL: "5"
         run: |
           python -u src/log_update.py
 
       - name: Commit and Push Changes (to Tenshi repo)
-        # always() 确保脚本出错时产物也能被提交归档
-        if: always()
+        # 真正更新了记忆，或脚本失败留下半成品时才提交；纯跳过（窗口外/未静默）不写空 commit。
+        if: always() && (steps.update_script.outcome == 'failure' || steps.update_script.outputs.updated == 'true')
         working-directory: tenshi
         run: |
           git config --global --add safe.directory "*"
@@ -124,7 +131,7 @@ jobs:
           fi
 
       - name: Build Release Package
-        if: steps.update_script.outcome == 'success'
+        if: steps.update_script.outputs.updated == 'true'
         working-directory: tenshi
         run: |
           mkdir -p release_bundle/downloads
@@ -148,7 +155,7 @@ jobs:
           zip -r release_payload.zip release_bundle >/dev/null 2>&1
 
       - name: Create Daily Backup Release
-        if: steps.update_script.outcome == 'success'
+        if: steps.update_script.outputs.updated == 'true'
         id: create_backup_release
         continue-on-error: true
         uses: softprops/action-gh-release@v2
@@ -165,7 +172,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
 
       - name: Upload backup artifact fallback
-        if: steps.update_script.outcome == 'success' && steps.create_backup_release.outcome != 'success'
+        if: steps.update_script.outputs.updated == 'true' && steps.create_backup_release.outcome != 'success'
         uses: actions/upload-artifact@v4
         with:
           name: tenshi-daily-backup-${{ steps.date.outputs.date }}
