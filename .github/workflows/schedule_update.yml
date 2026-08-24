@@ -138,6 +138,9 @@ jobs:
           if [ -f "data/tenshi_log.json" ]; then
             cp -f "data/tenshi_log.json" release_bundle/
           fi
+          if [ -f "data/context_compressions.json" ]; then
+            cp -f "data/context_compressions.json" release_bundle/
+          fi
           if [ -f "data/summary_cursor.json" ]; then
             cp -f "data/summary_cursor.json" release_bundle/
           fi
@@ -183,6 +186,7 @@ jobs:
           enc_name="${bundle_name}.enc"
           tar -czf "/tmp/${bundle_name}" \
             data/tenshi_log.json \
+            data/context_compressions.json \
             data/knowledge_base.json \
             logs/summary_update.log \
             logs/summary_llm_trace.jsonl 2>/dev/null || true

@@ -35,6 +35,8 @@ jobs:
             src/
             Tenshi.json
             data/tenshi_log.json
+            data/context_compressions.json
+            data/summary_cursor.json
             data/knowledge_base.json
             data/perception_schedule.json
             data/image_analysis_cache.json
@@ -190,7 +192,7 @@ jobs:
           git config --global user.name "比那名居 天子"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          git add Tenshi.json data/tenshi_log.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep || true
+          git add Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep || true
           git commit -m "天子已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do
@@ -230,6 +232,7 @@ jobs:
           enc_name="${bundle_name}.enc"
           tar -czf "/tmp/${bundle_name}" \
             data/tenshi_log.json \
+            data/context_compressions.json \
             data/knowledge_base.json \
             logs/debug.log \
             logs/llm_trace.jsonl 2>/dev/null || true
