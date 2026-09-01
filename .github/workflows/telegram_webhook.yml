@@ -146,6 +146,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
+          GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
           MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
           CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
           CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
