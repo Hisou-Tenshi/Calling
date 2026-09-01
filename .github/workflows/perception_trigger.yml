@@ -131,6 +131,8 @@ jobs:
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
+          GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
