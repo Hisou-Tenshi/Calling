@@ -1,7 +1,13 @@
 name: Build Tenshi Docker Base (via Calling)
 
 on:
+  # 手动触发应急
   workflow_dispatch:
+  # 由 Tenshi 仓库的 tenshi-deps-watch.yml 在 Dockerfile / requirements.txt
+  # 变更后通知过来（镜像里只有依赖与系统包，代码是各工作流现拉的，
+  # 所以只有依赖变更才需要重建镜像）。
+  repository_dispatch:
+    types: [tenshi_deps_changed]
 
 env:
   REGISTRY: ghcr.io
@@ -24,6 +30,29 @@ jobs:
           token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
           fetch-depth: 0
           path: tenshi
+
+      - name: Resolve revisions for labels
+        id: rev
+        run: |
+          # 镜像里打进去的 *依赖* 来自 Tenshi 仓库（context=./tenshi），
+          # Calling 的 SHA 只代表"用哪版构建脚本"。两者都记下来，避免
+          # 事后无法判断镜像对应哪版代码（2026-09-10 排查时吃过这个亏）。
+          echo "tenshi=$(git -C tenshi rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "calling=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Report pinned dependencies
+        run: |
+          # 只把声明打出来备用；真正的版本正确性由 Dockerfile 里的
+          # `pip install -r requirements.txt` 在构建时校验（钉的版本不存在会直接失败）。
+          # 这里刻意不做 pip 检查：runner 上的 pip 环境与镜像内 Python 环境无关，
+          # 那种"校验"只会给人虚假的安全感。
+          pins=$(grep -E '^[A-Za-z0-9._-]+==' tenshi/requirements.txt || true)
+          if [ -z "$pins" ]; then
+            echo "::warning title=无钉版本::requirements.txt 没有任何 == 钉版本，镜像会随上游漂移"
+          else
+            echo "本次构建的钉版本声明："
+            echo "$pins"
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -51,7 +80,11 @@ jobs:
           file: ./tenshi/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          labels: |
+            ${{ steps.meta.outputs.labels }}
+            org.opencontainers.image.revision=${{ steps.rev.outputs.tenshi }}
+            io.tenshi.tenshi-revision=${{ steps.rev.outputs.tenshi }}
+            io.tenshi.calling-revision=${{ steps.rev.outputs.calling }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
