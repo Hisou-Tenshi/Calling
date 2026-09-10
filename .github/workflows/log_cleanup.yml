@@ -38,14 +38,28 @@ jobs:
           mkdir -p data logs downloads
 
           DATE="${{ steps.date.outputs.date }}"
-          mkdir -p "logs/archive/${DATE}"
 
           # 仅归档回复侧运行时日志（不碰 summary_update / summary_llm_trace）
+          #
+          # 空日志保护：只有真的有内容时才建归档目录，避免再次产生一批 0 字节归档
+          # 把「日志其实没落盘」这件事掩盖掉（2026-09-10 排查即被此坑过一次：
+          # sparse-checkout 白名单缺 logs/debug.log，git add 被静默拒绝，
+          # 于是 log_cleanup 每天忠实地归档一个空文件）。
+          archived=0
           for f in logs/debug.log logs/llm_trace.jsonl; do
-            if [ -f "$f" ]; then
+            if [ -s "$f" ]; then
+              mkdir -p "logs/archive/${DATE}"
               cp -f "$f" "logs/archive/${DATE}/" || true
+              archived=$((archived + 1))
+            elif [ -f "$f" ]; then
+              echo "::warning title=空日志::${f} 为 0 字节，跳过归档（该文件可能从未入库 / 无人写入）"
+            else
+              echo "::warning title=缺日志::${f} 不存在，跳过归档"
             fi
           done
+          if [ "$archived" -eq 0 ]; then
+            echo "本次没有任何非空运行时日志可归档（已跳过 logs/archive/${DATE}/ 的创建）"
+          fi
 
           # 清理过期归档（只保留近 3 天）
           find logs/archive -mindepth 1 -maxdepth 1 -type d -name '????-??-??' | sort | head -n -3 | xargs -r rm -rf

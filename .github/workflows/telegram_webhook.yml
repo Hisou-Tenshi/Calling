@@ -30,6 +30,15 @@ jobs:
           fetch-depth: 1
           path: tenshi
           # Reply path only: skip data/archive, secure_failures, logs/archive, etc.
+          #
+          # 注意：sparse-checkout 的白名单必须覆盖本 workflow 后面 `git add` 的每一个路径。
+          # git 对「白名单之外」的路径会直接拒绝 add：
+          #   "matched paths that exist outside of your sparse-checkout definition,
+          #    so will not be updated in the index"
+          # 而 `git add ... || true` 会把这条拒绝吞掉，导致「看不见的静默丢失」——
+          # 2026-09-10 排查发现 logs/debug.log 与 logs/llm_trace.jsonl 正因为只写了
+          # logs/.gitkeep 而从未入库，log_cleanup 每天归档到的都是空文件。
+          # 同批缺失的还有 data/image_analysis_cache.json 与 downloads/。
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             src/
@@ -44,7 +53,9 @@ jobs:
             data/tenshi_memory.db
             data/world_history.json
             data/knowledge_base_events/
-            downloads/.gitkeep
+            downloads/
+            logs/debug.log
+            logs/llm_trace.jsonl
             logs/.gitkeep
 
       - name: "Guard: wait if perception is running"
@@ -194,7 +205,9 @@ jobs:
           git config --global user.name "比那名居 天子"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          git add Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep || true
+          # `--sparse` 是关键：即使将来有人往 git add 里加了白名单之外的路径，
+          # 也不会再被静默拒绝（宁可多加一个文件，也不要悄悄丢日志）。
+          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep || true
           git commit -m "天子已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do
