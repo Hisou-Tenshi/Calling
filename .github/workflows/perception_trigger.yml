@@ -122,6 +122,28 @@ jobs:
             f.write(f"should_skip={'true' if should_skip else 'false'}\n")
           PY
 
+      - name: Restore schedule KV if this run was skipped
+        # 守卫跳过时，Cloudflare Worker 已经把队首从 KV 弹掉了。这里把 tenshi 仓库里那份
+        # data/perception_schedule.json 的待触发队列重新同步回 KV，让下一次 cron 还能捞起来；
+        # 否则这条定时（包括主回复全链失败后登记的 [reply-retry] 近程重试）就此丢失。
+        if: steps.guard_webhook.outputs.should_skip == 'true'
+        working-directory: tenshi
+        env:
+          PERCEPTION_SCHEDULE_SYNC_URL: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_URL }}
+          PERCEPTION_SCHEDULE_SYNC_SECRET: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_SECRET }}
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "src")
+          try:
+              from perception_schedule import list_pending_schedule_entries, _sync_to_worker_kv
+              entries = list_pending_schedule_entries()
+              print(f"[schedule-restore] 本次被守卫跳过，重新同步 {len(entries)} 条待触发条目到 KV")
+              print(_sync_to_worker_kv(entries))
+          except Exception as e:
+              print(f"[schedule-restore] 跳过（best-effort）：{type(e).__name__}: {e}")
+          PY
+
       - name: Run Perception Layer
         id: run_perception
         continue-on-error: true
@@ -151,6 +173,9 @@ jobs:
           PERCEPTION_SCHEDULED_FORCE: ${{ github.event.client_payload.scheduled_force }}
           PERCEPTION_SCHEDULE_NOTE: ${{ github.event.client_payload.note }}
           PERCEPTION_TRIGGER_AT_MS: ${{ github.event.client_payload.trigger_at_ms }}
+          # 感知层里也可能补跑回复引擎（[reply-retry] 近程重试），它登记的定时条目要能同步 KV
+          PERCEPTION_SCHEDULE_SYNC_URL: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_URL }}
+          PERCEPTION_SCHEDULE_SYNC_SECRET: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_SECRET }}
         run: |
           set +e
           git config --global --add safe.directory /__w/Calling/Calling/tenshi
