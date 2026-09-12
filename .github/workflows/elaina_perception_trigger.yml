@@ -108,8 +108,17 @@ jobs:
           import sys
           sys.path.insert(0, "src")
           try:
-              from perception_schedule import list_pending_schedule_entries, _sync_to_worker_kv
-              entries = list_pending_schedule_entries()
+              # 优先用公开 helper；老版本仓库（如 Elaina 的副本）没有它时退回内部 loader
+              try:
+                  from perception_schedule import list_pending_schedule_entries as _list_entries
+              except ImportError:
+                  from perception_schedule import _load_doc
+
+                  def _list_entries():
+                      return (_load_doc().get("entries") or [])
+              from perception_schedule import _sync_to_worker_kv
+
+              entries = _list_entries()
               print(f"[schedule-restore] 本次被守卫跳过，重新同步 {len(entries)} 条待触发条目到 KV")
               print(_sync_to_worker_kv(entries))
           except Exception as e:
