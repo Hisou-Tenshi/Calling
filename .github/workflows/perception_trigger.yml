@@ -172,6 +172,11 @@ jobs:
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          # 感知层里会补跑回复引擎（[reply-retry] 重试），回复链的 OpenRouter/Grok 段也要能起来
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
           GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
@@ -217,7 +222,10 @@ jobs:
           # 感知层同样会写 logs/debug.log 与 logs/llm_trace.jsonl，一并提交，
           # 否则这两份日志只有回复轮次在写、且随时可能被 cleanup 清掉。
           # `--sparse` 保证白名单外的路径也不会被静默拒绝。
-          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json logs/debug.log logs/llm_trace.jsonl logs/.gitkeep >/dev/null 2>&1 || true
+          # 与 telegram_webhook 保持同一份清单：感知层现在也会补跑回复引擎，
+          # 它会写 image_analysis_cache / knowledge_base / downloads。
+          # `--sparse` 保证白名单外的路径也不会被静默拒绝。
+          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep >/dev/null 2>&1 || true
           git commit -m "天子感知层：世界观测日志 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do

@@ -188,10 +188,12 @@ jobs:
           git config --global user.name "伊蕾娜"
           git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
 
-          # 鲁棒地添加文件：逐个检查是否存在
-          for f in Elaina.json data/tenshi_log.json data/perception_schedule.json; do
+          # 鲁棒地添加文件：逐个检查是否存在（不存在就跳过）
+          # 清单与 elaina_telegram_webhook.yml 对齐：感知层现在也会补跑回复引擎，
+          # 它会写记忆库 / embedding 缓存 / knowledge_base / downloads / 日志。
+          for f in Elaina.json data/tenshi_log.json data/perception_schedule.json data/embedding_cache.pkl data/tenshi_memory.db data/knowledge_base.json downloads/ logs/; do
             if [ -e "$f" ]; then
-              git add "$f"
+              git add "$f" >/dev/null 2>&1 || true
             fi
           done
 
