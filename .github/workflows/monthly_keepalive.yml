@@ -1,0 +1,121 @@
+# =============================================================================
+#  月度保活（Monthly Keep-Alive）—— 每月 1 号提交一次，防止仓库「过期」
+# =============================================================================
+#
+#  背景：
+#    GitHub 会在仓库连续 60 天没有任何活动后，自动停用该仓库所有 scheduled
+#    workflow（cron 静默失效，必须手动去 Actions 页面重新启用）。本 workflow
+#    每月 1 号重写 README 最后一行的版权页脚（年份区间 + 更新月份），把仓库的
+#    「最后活动时间」稳定刷新到 30 天以内。
+#
+#  为什么不「只在 1 月改版权年份」：
+#    年份一年只变一次，2–12 月没有 diff 就没有提交 —— 60 天后先被停用的恰恰是
+#    这个保活 workflow 自己。所以页脚带上「精确到月」的更新标记，保证每月必有
+#    一次真实提交。
+#
+#  其他：
+#    - cron 只认 UTC：每月 1 号 00:37 UTC = 北京时间 08:37（仍然是 1 号）；
+#      错开整点，避开 GitHub 的整点调度高峰。
+#    - 推送用 GITHUB_TOKEN：由它触发的 push 不会再连锁触发其他 workflow
+#      （本仓库存在监听 push 的 workflow，所以这里刻意不用 PAT）。
+#      若仓库把 Actions 的默认权限设成了只读，加一个名为 KEEPALIVE_TOKEN 的
+#      secret（PAT，contents:write）即可自动接管，无需改本文件。
+#    - 只有真的产生 diff 才提交；push 失败时先 rebase 再重试，避免和其他
+#      workflow 抢同一个分支。
+#    - 页脚维护是幂等的：脚本只重写 `Copyright ©` 段落里的年份区间和
+#      「最后更新 YYYY-MM」，其余文字保持原样。
+# =============================================================================
+
+name: Monthly Keep-Alive
+
+on:
+  schedule:
+    # 每月 1 号 00:37 UTC（北京时间 08:37）
+    - cron: "37 0 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: monthly-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.KEEPALIVE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Refresh README copyright footer
+        run: |
+          python3 - <<'PY'
+          import datetime, pathlib, re
+
+          README = pathlib.Path("README.md")
+          today = datetime.datetime.now(datetime.timezone.utc)
+          month = f"{today:%Y-%m}"
+
+          raw = README.read_bytes().decode("utf-8")
+          # 保持文件原有的换行风格（三个仓库里 LF / CRLF 都有）
+          newline = "\r\n" if raw.count("\r\n") * 2 > raw.count("\n") else "\n"
+          lines = raw.replace("\r\n", "\n").split("\n")
+
+          FOOTER = re.compile(r'^<p align="center"><sub>Copyright © (.*?)</sub></p>$')
+          hits = [i for i, line in enumerate(lines) if FOOTER.match(line.strip())]
+
+          if hits:
+              i = hits[-1]
+              body = FOOTER.match(lines[i].strip()).group(1)
+              years = re.findall(r"\d{4}", body.split("最后更新")[0])
+              start = int(years[0]) if years else today.year
+              span = f"{start}–{today.year}" if start < today.year else str(today.year)
+              footer = re.sub(r"Copyright © \d{4}(?:[–—-]\d{4})?", f"Copyright © {span}", lines[i].strip())
+              footer = re.sub(r"最后更新 \d{4}-\d{2}", f"最后更新 {month}", footer)
+              lines.pop(i)
+          else:
+              footer = (f'<p align="center"><sub>Copyright © {today.year} 緋想天子 (Hisou-Tenshi)'
+                        f' · 最后更新 {month}</sub></p>')
+
+          # 页脚永远待在文件最后一行，且与上文之间保留一个空行
+          while lines and not lines[-1].strip():
+              lines.pop()
+          lines += ["", footer, ""]
+
+          # 用 write_bytes：write_text 会按平台再把 "\n" 转成 os.linesep，
+          # 在 Windows 上会把上面判好的换行风格二次破坏（\r\r\n）
+          README.write_bytes(newline.join(lines).encode("utf-8"))
+          print(footer)
+          PY
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "緋想天子"
+          git config user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
+
+          if git diff --quiet -- README.md; then
+            echo "README 无变化，跳过提交"
+            exit 0
+          fi
+
+          git add README.md
+          git commit -m "月度保活：更新 README 版权页脚 [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "推送成功（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+            sleep $((attempt * 5))
+          done
+
+          echo "连续 3 次推送失败，本次保活放弃" >&2
+          exit 1

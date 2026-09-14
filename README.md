@@ -366,3 +366,5 @@ Calling/
 | POST | `/api/translate` | 翻译文件（同步，等待全部完成） |
 | POST | `/api/translate/stream` | 翻译文件（SSE 流式，逐块返回） |
 | POST | `/api/translate/abort/{job_id}` | 中止流式翻译任务 |
+
+<p align="center"><sub>Copyright © 2026 緋想天子 (Hisou-Tenshi) · 最后更新 2026-09</sub></p>
