@@ -1,0 +1,64 @@
+==============================================================================
+Claude 代理可达性检测（Calling）
+  时间(UTC) : 2026-09-15T02:10:33+00:00
+  运行环境  : Tenshi 运行容器 · 02a87470fc54 / linux 6.17.0-1022-azure / Python 3.10.21
+  GitHub    : 本地运行（结论不代表 GitHub runner）
+  探测模型  : claude-opus-4-6、claude-sonnet-4-6、claude-3-5-sonnet-20241022 · messages × 3（开启）
+==============================================================================
+[出口] 探测 runner 公网出口 IP…
+  → 20.161.67.209
+[通路] 共 5 个，其中已配置 5 个
+  → Proxy1/Base  https://codeyu.shop  key=sk-1…33ac（len=67）（来源 CLAUDE_PROXY_KEY_BASE）
+    DNS : 64.83.15.230 (IPv4)  22.9ms
+    TCP : OK 64.83.15.230:443  75.1ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 150.9ms
+    GET  https://codeyu.shop/v1/models → status=200 228.5ms
+    POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
+      [model=claude-opus-4-6] status=200 2235.0ms body={"id":"msg_d05e983605e5467e82a2737d51c415be","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","model":"claude-opus-4-6","usage":{"input_tokens":3,
+      [复测 2/3] status=200 2160.6ms
+      [复测 3/3] status=200 1831.7ms
+    [结论] ✅ 可用 —— 可达且可调用
+  → Proxy1/Prime  https://codeyu.shop  key=sk-9…c44c（len=67）（来源 CLAUDE_PROXY_KEY_PRIME）
+    DNS : 64.83.15.230 (IPv4)  11.0ms
+    TCP : OK 64.83.15.230:443  70.5ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 132.1ms
+    GET  https://codeyu.shop/v1/models → status=200 224.2ms
+    POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
+      [model=claude-opus-4-6] status=200 232.0ms body={"id":"msg_013DM3pzmXgWf6oHPz6SqB41GL","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_detai
+      [复测 2/3] status=200 231.7ms
+      [复测 3/3] status=200 228.3ms
+    [结论] ✅ 可用 —— 可达且可调用
+  → Proxy1/Max  https://codeyu.shop  key=sk-e…596f（len=67）（来源 CLAUDE_PROXY_KEY_MAX）
+    DNS : 64.83.15.230 (IPv4)  15.3ms
+    TCP : OK 64.83.15.230:443  66.7ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 132.0ms
+    GET  https://codeyu.shop/v1/models → status=200 201.7ms
+    POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
+      [model=claude-opus-4-6] status=200 2081.6ms body={"id":"msg_011Cf4QvZLT1hDBNJYvHEr5d","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management"
+      [复测 2/3] status=200 2939.7ms
+      [复测 3/3] status=200 3118.8ms
+    [结论] ✅ 可用 —— 可达且可调用
+  → Proxy2  https://cursor.scihub.edu.kg/api  key=cr_0…d189（len=67）（来源 CLAUDE_PROXY_KEY_2）
+    DNS : gaierror: [Errno -2] Name or service not known  374.4ms
+    [跳过] 网络层已不可达，不再发 HTTP 请求（结论已确定）
+    [结论] ❌ DNS 失败 —— DNS 解析失败：gaierror: [Errno -2] Name or service not known
+  → Official  https://api.anthropic.com  key=sk-a…XwAA（len=108）（来源 CLAUDE_API_KEY）
+    DNS : 160.79.104.10 (IPv4)/2607:6bc0::10 (IPv6)  1.7ms
+    TCP : OK 160.79.104.10:443  7.7ms
+    TLS : TLSv1.3 / TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · 证书 api.anthropic.com ← WE1 · 37 天后到期 · 31.6ms
+    GET  https://api.anthropic.com/v1/models → status=200 126.6ms
+    POST https://api.anthropic.com/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
+      [model=claude-opus-4-6] status=200 946.0ms body={"model":"claude-opus-4-6","id":"msg_011Cf4QveaFWC1HfxT3tA44k","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"us
+      [复测 2/3] status=200 875.0ms
+      [复测 3/3] status=200 1035.4ms
+    [结论] ✅ 可用 —— 可达且可调用
+==============================================================================
+汇总：已配置 5 个 · 可用 4 个 · 异常 1 个
+  - Proxy1/Base    ✅ 可用
+  - Proxy1/Prime   ✅ 可用
+  - Proxy1/Max     ✅ 可用
+  - Proxy2         ❌ DNS 失败
+  - Official       ✅ 可用
+报告：reports/claude-proxy-reachability/container/latest.md
+数据：reports/claude-proxy-reachability/container/latest.json
+==============================================================================
