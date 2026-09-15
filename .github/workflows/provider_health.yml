@@ -62,7 +62,7 @@ on:
       providers:
         description: "要探测的类别（逗号分隔）"
         required: false
-        default: "claude,gemini,deepseek,gpt,openrouter,grok"
+        default: "claude,gemini,deepseek,gpt,glm,openrouter,grok"
       attempts:
         description: "每条通路的真实调用次数（仅 full）"
         required: false
@@ -115,10 +115,12 @@ jobs:
           FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
           GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
           GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
+          GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,openrouter,grok' }}
+          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,openrouter,grok' }}
           PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
           DISPATCH_MODE: ${{ github.event.inputs.mode || '' }}
           SCHEDULE_CRON: ${{ github.event.schedule }}

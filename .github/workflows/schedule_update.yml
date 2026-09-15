@@ -63,6 +63,9 @@ jobs:
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
           GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
+          # GLM（智谱 / Z.ai，走官方 zai-sdk）：主对话 high 档 + low 档随机池的一家
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
+          GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
           TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
