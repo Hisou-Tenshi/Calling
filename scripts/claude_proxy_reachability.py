@@ -149,6 +149,25 @@ def os_label() -> str:
         return f"{os.getenv('RUNNER_OS') or sys.platform}"
 
 
+def detect_environment() -> str:
+    """本次探测跑在容器里还是宿主 runner 上。
+
+    这一点是整套检测的关键：Tenshi 的回复任务跑在 `container:` 指定的 job 容器里
+    （ghcr.io/hisou-tenshi/calling-tenshi:latest），容器与宿主 runner 的 DNS / 出网 /
+    证书信任链并不相同。只在宿主上探测会得出「代理一切正常」的结论，而 Tenshi 在容器里
+    每一轮都连不上——所以两边都要测，再对照。
+    """
+    try:
+        if pathlib.Path("/.dockerenv").exists():
+            return "容器（job container）"
+        cgroup = pathlib.Path("/proc/1/cgroup")
+        if cgroup.exists() and "docker" in cgroup.read_text(encoding="utf-8", errors="replace"):
+            return "容器（job container）"
+    except Exception:  # noqa: BLE001
+        pass
+    return "宿主 runner"
+
+
 # ============================================================
 # 分层探测
 # ============================================================
@@ -731,7 +750,10 @@ def build_markdown(context: dict, endpoints: list[dict]) -> str:
     lines.append("| 项目 | 值 |")
     lines.append("|---|---|")
     lines.append(f"| 检测时间（UTC） | `{context['started_at']}` |")
-    lines.append(f"| 运行环境 | `{context['runner']}` / `{context['os']}` / Python `{context['python']}` |")
+    lines.append(
+        f"| 运行环境 | **{context.get('environment') or '未标注'}** · `{context['runner']}`"
+        f" / `{context['os']}` / Python `{context['python']}` |"
+    )
     if context["github"]:
         lines.append(
             f"| GitHub | run `{context['github'].get('run_id')}` · workflow `{context['github'].get('workflow')}`"
@@ -864,6 +886,7 @@ def build_summary_record(context: dict, endpoints: list[dict]) -> dict:
         "ts": context["started_at"],
         "run_id": (context["github"] or {}).get("run_id"),
         "runner": context["runner"],
+        "environment": context.get("environment"),
         "egress_ip": context["egress"].get("ip"),
         "models": context["models"],
         "endpoints": {
@@ -878,6 +901,124 @@ def build_summary_record(context: dict, endpoints: list[dict]) -> dict:
             if endpoint["configured"]
         },
     }
+
+
+# ============================================================
+# 宿主 vs 容器 对照（Tenshi 的真实运行环境是容器）
+# ============================================================
+
+
+def _load_latest(path: str) -> dict:
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def _env_title(payload: dict, fallback: str) -> str:
+    context = payload.get("context") or {}
+    env = context.get("environment") or "未知环境"
+    runner = context.get("runner") or "?"
+    return f"{env}（{fallback}：{runner}）"
+
+
+def _failure_hint(endpoint: dict) -> str:
+    """给出一条失败通路最有信息量的那句。"""
+    if not endpoint:
+        return "未探测"
+    for key in ("tls", "tcp", "dns"):
+        layer = endpoint.get(key) or {}
+        if layer and not layer.get("ok") and layer.get("error"):
+            return f"{key.upper()}: {layer['error']}"
+    messages = endpoint.get("messages") or {}
+    statuses = [s for s in (messages.get("statuses") or []) if s is not None]
+    if statuses:
+        detail = endpoint.get("verdict_text") or ""
+        return f"HTTP {statuses[-1]}" + (f" · {detail[:120]}" if detail else "")
+    return (endpoint.get("verdict_text") or "")[:160]
+
+
+def build_compare_markdown(a_payload: dict, b_payload: dict, a_label: str, b_label: str) -> str:
+    a_env, b_env = _env_title(a_payload, a_label), _env_title(b_payload, b_label)
+    a_label = (a_payload.get("context") or {}).get("environment") or a_label
+    b_label = (b_payload.get("context") or {}).get("environment") or b_label
+    a_endpoints = {e["tag"]: e for e in (a_payload.get("endpoints") or [])}
+    b_endpoints = {e["tag"]: e for e in (b_payload.get("endpoints") or [])}
+    tags = [t for t in dict.fromkeys(list(a_endpoints) + list(b_endpoints))]
+
+    only_b_fail: list[str] = []
+    only_a_fail: list[str] = []
+    both_fail: list[str] = []
+    rows: list[str] = []
+    for tag in tags:
+        a, b = a_endpoints.get(tag), b_endpoints.get(tag)
+        if not (a or {}).get("configured") and not (b or {}).get("configured"):
+            continue
+        av = (a or {}).get("verdict", "not_configured")
+        bv = (b or {}).get("verdict", "not_configured")
+        if av == "ok" and bv == "ok":
+            note = "两边一致可用"
+        elif av == "ok" and bv != "ok":
+            note = f"**只有 {b_label} 不可达** → 问题在该环境（容器出网/DNS/证书），代理本身没毛病"
+            only_b_fail.append(tag)
+        elif av != "ok" and bv == "ok":
+            note = f"只有 {a_label} 不可达"
+            only_a_fail.append(tag)
+        elif av == bv:
+            note = f"两边一致失败（{label(av)}）→ 偏代理侧 / 配置侧问题"
+            both_fail.append(tag)
+        else:
+            note = f"两边失败原因不同：{_failure_hint(a)} / {_failure_hint(b)}"
+            both_fail.append(tag)
+        rows.append(
+            "| `{tag}` | {a} | {b} | {note} |".format(
+                tag=tag,
+                a=label(av) if (a or {}).get("configured") else "➖ 未配置",
+                b=label(bv) if (b or {}).get("configured") else "➖ 未配置",
+                note=note,
+            )
+        )
+
+    lines: list[str] = []
+    lines.append("# Claude 代理可达性对照报告（两种运行环境）")
+    lines.append("")
+    lines.append(f"- A（基线）：{a_env}")
+    lines.append(f"- B（对照）：{b_env}")
+    lines.append("")
+    lines.append("## 结论")
+    lines.append("")
+    if only_b_fail:
+        lines.append(
+            f"> ⚠️ **{len(only_b_fail)} 个通路只在 B（Tenshi 运行环境）不可达**："
+            + "、".join(f"`{t}`" for t in only_b_fail)
+        )
+        lines.append(">")
+        lines.append("> 这就是「Tenshi 运行时 Claude 全链失败、但在别处测又一切正常」的**说法**：")
+        lines.append("> 故障在 B 所处环境的出网 / DNS / 证书信任链上，不在代理端口上。")
+        lines.append("> 下一步看下表里 B 的具体失败层（DNS / TCP / TLS / HTTP），再决定是修镜像、修解析还是修网络策略。")
+    elif both_fail:
+        lines.append(
+            "> ⚠️ 两边都失败的通路：" + "、".join(f"`{t}`" for t in both_fail) + " → 更像代理侧 / 配置侧问题。"
+        )
+    else:
+        lines.append("> ✅ 两种环境结论一致，没有「只在某一侧失败」的通路。")
+    lines.append("")
+    lines.append("## 逐通路对照")
+    lines.append("")
+    lines.append(f"| 通路 | A：{a_label} | B：{b_label} | 说明 |")
+    lines.append("|---|---|---|---|")
+    lines.extend(rows)
+    lines.append("")
+    lines.append("## 失败细节")
+    lines.append("")
+    for tag in only_b_fail + only_a_fail + both_fail:
+        a, b = a_endpoints.get(tag) or {}, b_endpoints.get(tag) or {}
+        lines.append(f"- `{tag}`")
+        lines.append(f"  - A {a_label}：{label(a.get('verdict', 'not_configured'))} —— {_failure_hint(a)}")
+        lines.append(f"  - B {b_label}：{label(b.get('verdict', 'not_configured'))} —— {_failure_hint(b)}")
+    if not (only_b_fail or only_a_fail or both_fail):
+        lines.append("- 无失败通路。")
+    lines.append("")
+    lines.append("- 完整数据：两侧各自的 `latest.json` / `latest.md` / `latest.log`")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def write_outputs(out_dir: pathlib.Path, context: dict, endpoints: list[dict], markdown: str) -> None:
@@ -922,6 +1063,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--out-dir", default="reports/claude-proxy-reachability", help="报告输出目录")
     parser.add_argument("--fail-on-unreachable", action="store_true", help="存在不可用通路时以退出码 1 结束")
+    parser.add_argument(
+        "--env-label",
+        default=None,
+        help="覆盖报告里的运行环境标签（默认自动识别：容器 / 宿主 runner）",
+    )
+    parser.add_argument(
+        "--compare",
+        nargs=2,
+        metavar=("A_JSON", "B_JSON"),
+        help="只做对照：把两份 latest.json 合成对照报告（不发起任何网络请求）",
+    )
+    parser.add_argument("--compare-out", default=None, help="对照报告输出路径（默认打印到 stdout）")
     parser.set_defaults(probe_messages=True)
     args = parser.parse_args(argv)
     args.models = [m.strip() for m in str(args.models).split(",") if m.strip()] or [DEFAULT_MODELS.split(",")[0]]
@@ -932,6 +1085,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     force_utf8_streams()
     args = parse_args(argv if argv is not None else sys.argv[1:])
+
+    if args.compare:
+        a_path, b_path = args.compare
+        markdown = build_compare_markdown(_load_latest(a_path), _load_latest(b_path), "A", "B")
+        if args.compare_out:
+            out = pathlib.Path(args.compare_out)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(markdown, encoding="utf-8")
+            print(f"对照报告已写入：{out}")
+        else:
+            print(markdown)
+        return 0
+
     started = now_utc()
 
     for env_name in (
@@ -962,6 +1128,7 @@ def main(argv: list[str] | None = None) -> int:
         "finished_at": None,
         "runner": os.getenv("RUNNER_NAME") or os.getenv("COMPUTERNAME") or socket.gethostname(),
         "os": os_label(),
+        "environment": args.env_label or detect_environment(),
         "python": sys.version.split()[0],
         "github": github,
         "models": args.models,
@@ -975,7 +1142,7 @@ def main(argv: list[str] | None = None) -> int:
     log("=" * 78)
     log("Claude 代理可达性检测（Calling）")
     log(f"  时间(UTC) : {context['started_at']}")
-    log(f"  运行环境  : {context['runner']} / {context['os']} / Python {context['python']}")
+    log(f"  运行环境  : {context['environment']} · {context['runner']} / {context['os']} / Python {context['python']}")
     log(f"  GitHub    : {github or '本地运行（结论不代表 GitHub runner）'}")
     log(f"  探测模型  : {'、'.join(args.models)} · messages × {args.attempts}（{'开启' if args.probe_messages else '关闭'}）")
     log("=" * 78)

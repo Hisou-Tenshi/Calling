@@ -28,18 +28,28 @@
 #  `Official`（Anthropic 官方）作为对照组：官方也挂说明是 runner 出网问题，
 #  只有代理挂说明是代理侧问题。
 #
+#  ⚠️ 关键：**同一次运行里探测两个环境，并出一份对照报告**。
+#    Tenshi 的回复任务跑在 `container:` 指定的 job 容器里（见 telegram_webhook.yml，
+#    镜像 ghcr.io/hisou-tenshi/calling-tenshi:latest），容器与宿主 runner 的 DNS /
+#    出网 / 证书信任链**并不相同**。2026-09-15 的实例：宿主 runner 上探测
+#    Proxy1 三档 + 官方全部 200，而 Tenshi 在容器里每一轮 pre-flight 都是
+#    `APIConnectionError: Connection error.`（已提交日志里 268/268 全失败）——
+#    只在宿主上测就会得出「代理一切正常」的错误结论。
+#    因此本工作流会先测宿主，再用 `docker run` 进同一个镜像测一遍，最后生成
+#    `compare.md` 指出「哪些通路只在容器里不可达」，这就是运行时失败的**说法**。
+#
 #  产出（都留在本仓库内）：
-#    · reports/claude-proxy-reachability/latest.md   —— 人读报告（同时进 Step Summary）
-#    · reports/claude-proxy-reachability/latest.json —— 机读原始数据
-#    · reports/claude-proxy-reachability/latest.log  —— 本次运行完整日志
+#    · reports/claude-proxy-reachability/host/…       —— 宿主 runner 侧（latest.md/json/log）
+#    · reports/claude-proxy-reachability/container/…  —— Tenshi 运行容器侧（同上）
+#    · reports/claude-proxy-reachability/compare.md   —— 两侧对照结论
 #    · reports/claude-proxy-reachability/history.jsonl —— 每次一行摘要（保留最近 500 条）
-#    · Actions artifact（保留 90 天）
+#    · Actions artifact（保留 90 天）+ run 页面的 Step Summary
 #  报告由本 workflow 自己提交回本仓库（提交信息带 [skip ci]，避免连锁触发）。
 #
 #  失败语义：默认「只要有已配置通路不可用就让本次运行失败」（Actions 会给仓库
-#  所有者发通知，等于一个免费的告警）；可用 workflow_dispatch 的
-#  fail_on_unreachable=false 临时关掉。若一个通路都没配置（secrets 缺失），
-#  只发 warning 不算失败。
+#  所有者发通知，等于一个免费的告警）——容器侧结论优先，因为那才是 Tenshi 的真实
+#  运行环境。可用 workflow_dispatch 的 fail_on_unreachable=false 临时关掉；
+#  若一个通路都没配置（secrets 缺失），只发 warning 不算失败。
 #
 #  手动运行：Actions → Claude Proxy Reachability → Run workflow，
 #  可指定候选模型 / 探测次数 / 是否真的发 messages（关掉 = 零 token 消耗）。
@@ -76,10 +86,15 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 concurrency:
   group: claude-proxy-reachability
   cancel-in-progress: false
+
+env:
+  REPORT_DIR: reports/claude-proxy-reachability
+  TENSHI_IMAGE: ghcr.io/hisou-tenshi/calling-tenshi:latest
 
 jobs:
   probe:
@@ -121,36 +136,113 @@ jobs:
           fi
 
           echo "探测参数：${ARGS[*]}"
-          python3 scripts/claude_proxy_reachability.py "${ARGS[@]}"
+          python3 scripts/claude_proxy_reachability.py "${ARGS[@]}" --out-dir "$REPORT_DIR/host" --env-label "宿主 runner"
           code=$?
           echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
           # 退出码留到最后一步统一判定：这里先保证报告/日志一定产出
           exit 0
 
+      - name: Probe inside the Tenshi job container (same image as the reply run)
+        id: probe_container
+        continue-on-error: true
+        env:
+          # 与上面完全同一套变量；`docker run -e NAME`（不带值）会从当前环境透传
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
+          CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
+          CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          PROBE_MODELS: ${{ github.event.inputs.models || 'claude-opus-4-6,claude-sonnet-4-6,claude-3-5-sonnet-20241022' }}
+          PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '3' }}
+          PROBE_MESSAGES: ${{ github.event.inputs.probe_messages || 'true' }}
+          FAIL_ON_UNREACHABLE: ${{ github.event.inputs.fail_on_unreachable || 'true' }}
+        run: |
+          set -uo pipefail
+          # Tenshi 的回复任务跑在 container: 里（见 telegram_webhook.yml），
+          # 容器的 DNS / 出网 / 证书链和宿主 runner 并不相同——只在宿主上探测会得出
+          # 「代理一切正常」，而 Tenshi 在容器里每一轮都连不上。所以这里必须进容器再测一遍。
+          if ! echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin >/dev/null 2>&1; then
+            echo "::warning::ghcr 登录失败，跳过容器内探测（对照报告将只有宿主一侧）"
+            exit 0
+          fi
+          if ! docker pull "$TENSHI_IMAGE" >/dev/null 2>&1; then
+            echo "::warning::拉取 $TENSHI_IMAGE 失败，跳过容器内探测"
+            exit 0
+          fi
+
+          ARGS=(--models "$PROBE_MODELS" --attempts "$PROBE_ATTEMPTS")
+          if [ "$PROBE_MESSAGES" != "true" ]; then
+            ARGS+=(--no-messages)
+          fi
+          if [ "$FAIL_ON_UNREACHABLE" = "true" ]; then
+            ARGS+=(--fail-on-unreachable)
+          fi
+
+          docker run --rm \
+            -u "$(id -u):$(id -g)" \
+            -v "$PWD":/work -w /work \
+            --entrypoint python3 \
+            -e CLAUDE_API_KEY -e CLAUDE_PROXY_BASE_URL \
+            -e CLAUDE_PROXY_KEY_BASE -e CLAUDE_PROXY_KEY_PRIME -e CLAUDE_PROXY_KEY_MAX -e CLAUDE_PROXY_KEY \
+            -e CLAUDE_PROXY_BASE_URL_2 -e CLAUDE_PROXY_KEY_2 \
+            "$TENSHI_IMAGE" scripts/claude_proxy_reachability.py "${ARGS[@]}" \
+              --out-dir "$REPORT_DIR/container" --env-label "Tenshi 运行容器"
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "$code" -ne 0 ]; then
+            echo "::warning::容器内探测退出码 ${code}（报告已尽力产出；宿主退出码见下一步判定）"
+          fi
+          exit 0
+
+      - name: Compare host vs container
+        if: always()
+        run: |
+          set -uo pipefail
+          HOST_JSON="$REPORT_DIR/host/latest.json"
+          CONTAINER_JSON="$REPORT_DIR/container/latest.json"
+          if [ ! -f "$HOST_JSON" ]; then
+            echo "::warning::宿主侧没有报告，跳过对照"
+            exit 0
+          fi
+          if [ ! -f "$CONTAINER_JSON" ]; then
+            echo "::warning::容器侧没有报告（登录/拉取/运行失败），对照报告只含宿主一侧"
+            exit 0
+          fi
+          python3 scripts/claude_proxy_reachability.py \
+            --compare "$HOST_JSON" "$CONTAINER_JSON" \
+            --compare-out "$REPORT_DIR/compare.md"
+          cat "$REPORT_DIR/compare.md" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish report to Step Summary
         if: always()
         run: |
           set -uo pipefail
-          DIR=reports/claude-proxy-reachability
           {
             echo ""
             echo "---"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
-          if [ -f "$DIR/latest.md" ]; then
-            cat "$DIR/latest.md" >> "$GITHUB_STEP_SUMMARY"
-          else
+          for SIDE in host container; do
+            if [ -f "$REPORT_DIR/$SIDE/latest.md" ]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              cat "$REPORT_DIR/$SIDE/latest.md" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          if [ ! -f "$REPORT_DIR/host/latest.md" ] && [ ! -f "$REPORT_DIR/container/latest.md" ]; then
             echo "> ❌ 报告未生成（探测脚本异常退出），请查看本步骤之前的日志。" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          if [ -f "$DIR/latest.log" ]; then
+          if [ -f "$REPORT_DIR/host/latest.log" ]; then
             {
               echo ""
-              echo "<details><summary>完整日志（latest.log 尾部 120 行）</summary>"
+              echo "<details><summary>宿主侧完整日志（latest.log 尾部 120 行）</summary>"
               echo ""
               echo '```text'
-              tail -n 120 "$DIR/latest.log"
+              tail -n 120 "$REPORT_DIR/host/latest.log"
               echo '```'
               echo ""
               echo "</details>"
@@ -163,7 +255,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: claude-proxy-reachability-${{ github.run_id }}
-          path: reports/claude-proxy-reachability/
+          path: ${{ env.REPORT_DIR }}/
           if-no-files-found: warn
           retention-days: 90
 
@@ -174,7 +266,7 @@ jobs:
           git config user.name "緋想天子"
           git config user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
 
-          DIR=reports/claude-proxy-reachability
+          DIR="$REPORT_DIR"
           if [ ! -d "$DIR" ]; then
             echo "本次没有产出报告目录（探测脚本未写出文件），跳过提交"
             exit 0
@@ -188,18 +280,23 @@ jobs:
 
           STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
           VERDICTS="$(python3 - <<'PY'
-          import json, pathlib
-          path = pathlib.Path("reports/claude-proxy-reachability/latest.json")
-          try:
-              data = json.loads(path.read_text(encoding="utf-8"))
+          import json, os, pathlib
+          base = pathlib.Path(os.environ.get("REPORT_DIR", "reports/claude-proxy-reachability"))
+          parts = []
+          for side in ("host", "container"):
+              path = base / side / "latest.json"
+              try:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+              except Exception:
+                  continue
+              env = (data.get("context") or {}).get("environment") or side
               items = [
                   f"{k}={v}"
                   for k, v in (data.get("verdicts") or {}).items()
                   if v != "not_configured"
               ]
-              print(" ".join(items) or "无通路")
-          except Exception:
-              print("结果不可读")
+              parts.append(f"{env}: " + (" ".join(items) or "无通路"))
+          print(" ｜ ".join(parts) or "无结果")
           PY
           )"
 
@@ -221,15 +318,32 @@ jobs:
       - name: Verdict
         if: always()
         env:
-          PROBE_EXIT: ${{ steps.probe.outputs.exit_code }}
+          HOST_EXIT: ${{ steps.probe.outputs.exit_code }}
+          CONTAINER_EXIT: ${{ steps.probe_container.outputs.exit_code }}
         run: |
           set -uo pipefail
-          code="${PROBE_EXIT:-}"
-          echo "探测脚本退出码：${code:-<空>}"
+          host="${HOST_EXIT:-}"
+          container="${CONTAINER_EXIT:-}"
+          echo "宿主 runner 退出码：${host:-<未运行>}"
+          echo "Tenshi 容器退出码：${container:-<未运行/被跳过>}"
 
-          case "$code" in
-            0) echo "✅ 已配置的 Claude 通路全部可用。" ;;
-            1) echo "::error::存在不可用的 Claude 通路 —— 详见 Step Summary / 报告（关键结论：看 DNS/TCP/TLS 是否全绿，再看 401/429/5xx）" ; exit 1 ;;
-            2) echo "::warning::没有任何 Claude 通路被配置（secrets 缺失），本次未做检测。" ;;
-            *) echo "::error::探测脚本异常退出（code=${code:-未知}），请查看日志。" ; exit 1 ;;
-          esac
+          # 容器才是 Tenshi 的真实运行环境，它的结论优先
+          if [ "$container" = "1" ]; then
+            echo "::error::Tenshi 运行容器内存在不可用的 Claude 通路 —— 这正是运行时 Claude 全链失败的原因；详见 Step Summary / 对照报告"
+            exit 1
+          fi
+          if [ "$host" = "1" ]; then
+            echo "::error::宿主 runner 上存在不可用的 Claude 通路 —— 详见 Step Summary / 报告"
+            exit 1
+          fi
+          if [ "$container" = "2" ] && [ "$host" = "2" ]; then
+            echo "::warning::没有任何 Claude 通路被配置（secrets 缺失），本次未做检测。"
+            exit 0
+          fi
+          for code in "$host" "$container"; do
+            case "$code" in
+              ""|0|1|2) ;;
+              *) echo "::error::探测脚本异常退出（code=$code），请查看日志。"; exit 1 ;;
+            esac
+          done
+          echo "✅ 两种环境下已配置的 Claude 通路全部可用。"

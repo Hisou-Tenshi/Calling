@@ -381,13 +381,22 @@ Calling/
 DNS → TCP → TLS（含证书到期）→ `GET /v1/models` 与 `POST /v1/messages`（`max_tokens=1`）
 → runner 公网出口 IP（代理方要加白名单时用的就是它）；`Official` 官方通路作为对照组。
 
-- 脚本：`scripts/claude_proxy_reachability.py`（只用标准库，不依赖 Tenshi 代码）
+**同一次运行会探测两个环境并出对照报告**——这一点很关键：Tenshi 的回复任务跑在
+`container:` 指定的 job 容器里（`ghcr.io/hisou-tenshi/calling-tenshi:latest`），容器与宿主
+runner 的 DNS / 出网 / 证书信任链并不相同。只在宿主上探测会得出「代理一切正常」，
+而 Tenshi 在容器里可能每一轮 pre-flight 都是 `APIConnectionError`；`compare.md` 会直接指出
+「哪些通路只在容器里不可达」，这就是运行时失败的**说法**。
+
+- 脚本：`scripts/claude_proxy_reachability.py`（只用标准库，不依赖 Tenshi 代码；
+  `--compare A.json B.json` 可离线生成对照报告）
 - 环境变量：与 Tenshi 同名（`CLAUDE_API_KEY` / `CLAUDE_PROXY_BASE_URL` /
   `CLAUDE_PROXY_KEY_BASE|PRIME|MAX` / `CLAUDE_PROXY_BASE_URL_2` / `CLAUDE_PROXY_KEY_2`），
   不需要额外配置 secret
-- 产出：`reports/claude-proxy-reachability/`（`latest.md` 报告 / `latest.json` 原始数据 /
-  `latest.log` 完整日志 / `history.jsonl` 趋势），同时进 run 页面的 Step Summary 与 artifact，
+- 产出：`reports/claude-proxy-reachability/`（`host/` 与 `container/` 各一份
+  `latest.md` 报告 / `latest.json` 原始数据 / `latest.log` 完整日志，外加 `compare.md`
+  对照结论与 `history.jsonl` 趋势），同时进 run 页面的 Step Summary 与 artifact，
   并由工作流自己提交回本仓库（提交信息带 `[skip ci]`）
-- 默认「有已配置通路不可用就让本次运行失败」，等于一个免费的告警；手动运行时可关掉
+- 默认「有已配置通路不可用就让本次运行失败」（容器侧结论优先，因为那才是 Tenshi 的真实
+  运行环境），等于一个免费的告警；手动运行时可关掉
 
 <p align="center"><sub>Copyright © 2026 緋想天子 (Hisou-Tenshi) · 最后更新 2026-09</sub></p>
