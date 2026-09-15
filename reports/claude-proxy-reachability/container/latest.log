@@ -1,56 +1,56 @@
 ==============================================================================
 Claude 代理可达性检测（Calling）
-  时间(UTC) : 2026-09-15T02:14:03+00:00
-  运行环境  : Tenshi 运行容器 · d4e4e01467f5 / linux 6.17.0-1022-azure / Python 3.10.21
+  时间(UTC) : 2026-09-15T02:16:56+00:00
+  运行环境  : Tenshi 运行容器 · 66bc40627670 / linux 6.17.0-1022-azure / Python 3.10.21
   GitHub    : 本地运行（结论不代表 GitHub runner）
   探测模型  : claude-opus-4-6、claude-sonnet-4-6、claude-3-5-sonnet-20241022 · messages × 3（开启）
 ==============================================================================
 [出口] 探测 runner 公网出口 IP…
-  → 4.154.85.161
+  → 172.190.126.117
 [通路] 共 5 个，其中已配置 5 个
   → Proxy1/Base  https://codeyu.shop  key=sk-1…33ac（len=67）（来源 CLAUDE_PROXY_KEY_BASE）
-    DNS : 64.83.15.230 (IPv4)  67.3ms
-    TCP : OK 64.83.15.230:443  100.8ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 122.2ms
-    GET  https://codeyu.shop/v1/models → status=200 138.6ms
+    DNS : 64.83.15.230 (IPv4)  6.8ms
+    TCP : OK 64.83.15.230:443  63.0ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 141.1ms
+    GET  https://codeyu.shop/v1/models → status=200 214.9ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 1806.8ms body={"id":"msg_011Cf4RARfFQ57yJfxMm7vh2","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"max_tokens","model":"claude-opus-4-6","usage":{"input_tokens":1,"outpu
-      [复测 2/3] status=200 2186.4ms
-      [复测 3/3] status=200 2527.6ms
+      [model=claude-opus-4-6] status=200 2231.2ms body={"id":"msg_011Cf4RPCuejJw7zgWpqHSZb","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"max_tokens","model":"claude-opus-4-6","usage":{"input_tokens":1,"outpu
+      [复测 2/3] status=200 2018.6ms
+      [复测 3/3] status=200 2637.3ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy1/Prime  https://codeyu.shop  key=sk-9…c44c（len=67）（来源 CLAUDE_PROXY_KEY_PRIME）
     DNS : 64.83.15.230 (IPv4)  14.0ms
-    TCP : OK 64.83.15.230:443  69.3ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 87.0ms
-    GET  https://codeyu.shop/v1/models → status=200 142.0ms
+    TCP : OK 64.83.15.230:443  68.2ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 140.2ms
+    GET  https://codeyu.shop/v1/models → status=200 205.8ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 150.1ms body={"id":"msg_01nYeFt56mSrbAu4jYJhkdbU7u","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_detai
-      [复测 2/3] status=200 154.0ms
-      [复测 3/3] status=200 152.0ms
+      [model=claude-opus-4-6] status=200 229.8ms body={"id":"msg_01LWqGCMThGf5Pq53jAcc1osEY","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_detai
+      [复测 2/3] status=200 235.4ms
+      [复测 3/3] status=200 231.2ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy1/Max  https://codeyu.shop  key=sk-e…596f（len=67）（来源 CLAUDE_PROXY_KEY_MAX）
-    DNS : 64.83.15.230 (IPv4)  8.2ms
-    TCP : OK 64.83.15.230:443  41.3ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 88.3ms
-    GET  https://codeyu.shop/v1/models → status=200 116.9ms
+    DNS : 64.83.15.230 (IPv4)  10.9ms
+    TCP : OK 64.83.15.230:443  70.5ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 144.1ms
+    GET  https://codeyu.shop/v1/models → status=200 201.4ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 2286.4ms body={"id":"msg_011Cf4RCTxXAqSwTjtDGskBy","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management"
-      [复测 2/3] status=200 3000.4ms
-      [复测 3/3] status=200 2524.5ms
+      [model=claude-opus-4-6] status=200 2766.6ms body={"id":"msg_011Cf4RQhxh3rDqXWwSJxqxO","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management"
+      [复测 2/3] status=200 3142.9ms
+      [复测 3/3] status=200 3156.6ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy2  https://cursor.scihub.edu.kg/api  key=cr_0…d189（len=67）（来源 CLAUDE_PROXY_KEY_2）
-    DNS : gaierror: [Errno -2] Name or service not known  565.4ms
+    DNS : gaierror: [Errno -2] Name or service not known  352.7ms
     [跳过] 网络层已不可达，不再发 HTTP 请求（结论已确定）
     [结论] ❌ DNS 失败 —— DNS 解析失败：gaierror: [Errno -2] Name or service not known
   → Official  https://api.anthropic.com  key=sk-a…XwAA（len=108）（来源 CLAUDE_API_KEY）
-    DNS : 160.79.104.10 (IPv4)/2607:6bc0::10 (IPv6)  2.2ms
-    TCP : OK 160.79.104.10:443  8.2ms
-    TLS : TLSv1.3 / TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · 证书 api.anthropic.com ← WE1 · 37 天后到期 · 41.8ms
-    GET  https://api.anthropic.com/v1/models → status=200 210.2ms
+    DNS : 160.79.104.10 (IPv4)/2607:6bc0::10 (IPv6)  8.6ms
+    TCP : OK 160.79.104.10:443  3.8ms
+    TLS : TLSv1.3 / TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · 证书 api.anthropic.com ← WE1 · 37 天后到期 · 24.1ms
+    GET  https://api.anthropic.com/v1/models → status=200 131.1ms
     POST https://api.anthropic.com/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 1540.9ms body={"model":"claude-opus-4-6","id":"msg_011Cf4RC4LADQsD7orLwfxPw","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"us
-      [复测 2/3] status=200 1540.7ms
-      [复测 3/3] status=200 1778.1ms
+      [model=claude-opus-4-6] status=200 1790.6ms body={"model":"claude-opus-4-6","id":"msg_011Cf4RQxaFjDhS2o3isPAs4","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"us
+      [复测 2/3] status=200 1736.5ms
+      [复测 3/3] status=200 1647.7ms
     [结论] ✅ 可用 —— 可达且可调用
 ==============================================================================
 汇总：已配置 5 个 · 可用 4 个 · 异常 1 个
