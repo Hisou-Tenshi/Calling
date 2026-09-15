@@ -1,0 +1,186 @@
+# =============================================================================
+#  Provider Health Probe —— 每天 JST 02:00 探活所有 provider 的通路，结果登记进 Tenshi
+# =============================================================================
+#
+#  为什么（2026-09-15 事故的教训）：
+#    回复链的每一次调用都可能落在「官方 / 代理 1 三档 / 代理 2 / Fireworks…」里的任意一条
+#    通路上。通路坏了以前只能等线上真调用失败才知道，而失败信息可能只剩一句
+#    `APIConnectionError: Connection error.`（真实原因藏在 __cause__ 里）。
+#    这里改成**每天先探活**：结果写进 Tenshi 仓库的 data/provider_health.json，
+#    运行时由 Tenshi 的 src/provider_health.py 读取 —— 绿则照常调用，红则在最外层 ban
+#    （丢掉该通路 / 传空 key，让既有逻辑自己抛「没有可用通路」再往下一档走）。
+#
+#  为什么放在 Calling 而不是 Tenshi：
+#    · 完整的一套 provider secrets 在**本仓库**（Tenshi 仓库只有一部分，例如代理1 的三档
+#      key 只在这里），探活必须用运行时真正拿到的那套密钥，否则会漏探、误报；
+#    · 而且这里本来就有「Calling 代跑 Tenshi 工作流」的既有架构与提交回 Tenshi 的成熟写法。
+#    探测脚本、gate、JSON 全部属于 Tenshi（本工作流只是"代跑 + 回写"）。
+#
+#  为什么跑在容器里：
+#    回复任务跑在 ghcr.io/hisou-tenshi/calling-tenshi:latest 里，容器的 DNS / 出网 /
+#    证书信任链与宿主 runner 不同 —— 只在宿主上探会得出「一切正常」而容器里可能全灭。
+#
+#  覆盖（按「类别 + 通路」，不按模型名）：
+#    claude 代理1 Base/Prime/Max · 代理2 · 官方 ｜ gemini 官方 · 代理 ｜
+#    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
+#    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
+#
+#  产出（都提交回 Tenshi 仓库）：
+#    · data/provider_health.json         —— 机读结果（运行时 gate 读它）
+#    · reports/provider_health/latest.md —— 人读报告（同时也进 Step Summary / artifact）
+#
+#  失败语义：探活脚本自身异常才让 run 变红；某条通路是红**不算**失败（那是被探出来的
+#  事实，运行时自己会 ban 掉）。
+#
+#  时区：cron 只认 UTC。JST 02:00 = 前一日 17:00 UTC。
+# =============================================================================
+
+name: Provider Health Probe (Tenshi)
+
+on:
+  schedule:
+    # JST 02:00（UTC 17:00，前一日）
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      providers:
+        description: "要探测的类别（逗号分隔）"
+        required: false
+        default: "claude,gemini,deepseek,gpt,openrouter,grok"
+      attempts:
+        description: "每条通路的真实调用次数"
+        required: false
+        default: "1"
+      commit_result:
+        description: "把结果提交回 Tenshi 仓库"
+        type: boolean
+        default: true
+
+concurrency:
+  group: provider-health
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/hisou-tenshi/calling-tenshi:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout Tenshi (探测脚本与 gate 都在那边)
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ secrets.GH_REPO }}
+          token: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          fetch-depth: 0
+          path: tenshi
+
+      - name: Probe every provider path
+        id: probe
+        env:
+          PYTHONUNBUFFERED: "1"
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
+          CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
+          CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+          FIREWORKS_BASE_URL: ${{ secrets.FIREWORKS_BASE_URL }}
+          FIREWORKS_DEEPSEEK_V4_PRO_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_PRO_MODEL }}
+          FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
+          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
+          GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,openrouter,grok' }}
+          PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
+        run: |
+          set -uo pipefail
+          python -u tenshi/scripts/probe_provider_paths.py \
+            --providers "$PROBE_PROVIDERS" \
+            --attempts "$PROBE_ATTEMPTS" \
+            --json tenshi/data/provider_health.json \
+            --report tenshi/reports/provider_health/latest.md
+
+      - name: Publish report to Step Summary
+        if: always()
+        run: |
+          set -uo pipefail
+          if [ -f tenshi/reports/provider_health/latest.md ]; then
+            cat tenshi/reports/provider_health/latest.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> ❌ 探活报告未生成，请查看上一步日志。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-health-${{ github.run_id }}
+          path: |
+            tenshi/data/provider_health.json
+            tenshi/reports/provider_health/latest.md
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Commit result to Tenshi
+        if: always() && (github.event_name == 'schedule' || github.event.inputs.commit_result != 'false')
+        working-directory: tenshi
+        run: |
+          set -uo pipefail
+          # 容器任务里必须先认下这个仓库，否则 git 会以「不在 git 目录 / dubious ownership」拒绝
+          git config --global --add safe.directory "*"
+          # 用 --global 写身份：即使 cwd 不是仓库也不会因为「not in a git directory」直接炸
+          git config --global user.name "緋想天子"
+          git config --global user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
+
+          if [ ! -d .git ]; then
+            echo "::warning::tenshi/ 下没有 .git（checkout 未生效？），跳过回写；结果仍在 artifact 里"
+            exit 0
+          fi
+
+          # `--sparse` 是关键：即使白名单外也照加，宁可多加一个文件也不静默丢结果
+          git add --sparse -A data/provider_health.json reports/provider_health 2>/dev/null \
+            || git add -A data/provider_health.json reports/provider_health 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "探活结果无变化，跳过提交"
+            exit 0
+          fi
+
+          SUMMARY="$(python3 - <<'PY'
+          import json, pathlib
+          try:
+              data = json.loads(pathlib.Path("data/provider_health.json").read_text(encoding="utf-8"))
+              parts = []
+              for provider, entry in (data.get("providers") or {}).items():
+                  paths = entry.get("paths") or {}
+                  good = sum(1 for p in paths.values() if p.get("ok"))
+                  parts.append(f"{provider}:{'绿' if entry.get('enabled') else '红'}{good}/{len(paths)}")
+              print(" ".join(parts) or "无结果")
+          except Exception:
+              print("结果不可读")
+          PY
+          )"
+
+          git commit -m "Provider 探活：$(date -u '+%Y-%m-%d %H:%M UTC')（${SUMMARY}） [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "探活结果已推送回 Tenshi（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            sleep $((attempt * 5))
+          done
+          echo "::warning::探活结果连续 3 次推送失败（检查 TENSHI_BOT_ACTION_TOKEN 的写权限）"

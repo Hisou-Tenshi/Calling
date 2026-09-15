@@ -58,9 +58,9 @@
 name: Claude Proxy Reachability
 
 on:
-  schedule:
-    # 每 6 小时一次（23 分这个非整点分钟避开调度高峰）：01:23 / 07:23 / 13:23 / 19:23 UTC
-    - cron: "23 */6 * * *"
+  # 日常探活已由 provider_health.yml 承担（每天 JST 02:00，全 provider、结果回写 Tenshi）。
+  # 本工作流保留为**手动深度诊断**：分层 DNS/TCP/TLS + 宿主 vs 容器对照 +
+  # 「用 Tenshi 同款 SDK 调用复现」那一套，排查单个 Claude 问题时当放大镜用。
   workflow_dispatch:
     inputs:
       models:
