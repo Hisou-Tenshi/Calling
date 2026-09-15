@@ -46,6 +46,9 @@ jobs:
             data/summary_cursor.json
             data/knowledge_base.json
             data/perception_schedule.json
+            # 感知层「上次沉默时刻」状态：纯沉默不再写 tenshi_log.json，冷却/触发间隔
+            # 改读这个文件；不放进白名单就会导致 git add 被拒 → 状态永远推不回去。
+            data/perception_state.json
             # 每日探活结果：感知层里也可能补跑回复引擎，同样要能读到 provider health
             data/provider_health.json
             data/image_analysis_cache.json
@@ -229,8 +232,9 @@ jobs:
           # `--sparse` 保证白名单外的路径也不会被静默拒绝。
           # 与 telegram_webhook 保持同一份清单：感知层现在也会补跑回复引擎，
           # 它会写 image_analysis_cache / knowledge_base / downloads。
-          # `--sparse` 保证白名单外的路径也不会被静默拒绝。
-          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep >/dev/null 2>&1 || true
+          # data/perception_state.json：纯沉默时唯一会变动的文件（沉默时刻），
+          # 必须提交，否则冷却窗口在 Calling 侧反复归零、触发间隔跟着变。
+          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/perception_state.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep >/dev/null 2>&1 || true
           git commit -m "天子感知层：世界观测日志 [skip ci]" >/dev/null 2>&1 || true
 
           for attempt in 1 2 3; do
