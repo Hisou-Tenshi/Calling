@@ -227,7 +227,11 @@ jobs:
             -e CLAUDE_PROXY_BASE_URL_2 -e CLAUDE_PROXY_KEY_2 \
             "$TENSHI_IMAGE" - <<'PY'
           import os
+          import time
+          from concurrent.futures import ThreadPoolExecutor
+
           import anthropic
+          import httpx
 
           KEYS = [
               "CLAUDE_API_KEY",
@@ -261,43 +265,85 @@ jobs:
               ("Official", "", ("CLAUDE_API_KEY",)),
           ]
 
-          print(f"anthropic SDK 版本：{getattr(anthropic, '__version__', '?')}")
-          print("（下面只打印形态统计与 SDK 异常链，密钥内容已擦除）")
-          for name, base_env, key_envs in TARGETS:
+          def resolve(entry):
+              name, base_env, key_envs = entry
               base_raw = "https://api.anthropic.com" if not base_env else (os.getenv(base_env) or "")
-              key_raw = ""
-              key_from = None
+              key_raw, key_from = "", None
               for env_name in key_envs:
                   value = os.getenv(env_name) or ""
                   if value.strip():
-                      key_raw = value
-                      key_from = env_name
+                      key_raw, key_from = value, env_name
                       break
+              return name, base_raw, key_raw, key_from
+
+          print(f"anthropic SDK 版本：{getattr(anthropic, '__version__', '?')}")
+          print("（下面只打印形态统计与 SDK 异常链，密钥内容已擦除）")
+
+          print("\n########## A) 单发复现（非流式，15s 超时）##########")
+          for entry in TARGETS:
+              name, base_raw, key_raw, key_from = resolve(entry)
               print(f"\n--- {name}（key 来自 {key_from or '未配置'}）")
-              print(f"    base_url 形态：{shape(base_raw) if base_env else '（SDK 默认端点）'}")
-              print(f"    key 形态     ：{shape(key_raw) if key_raw else '（未配置）'}")
               if not key_raw:
                   print("    → 未配置，跳过")
                   continue
+              print(f"    base_url 形态：{shape(base_raw) if entry[1] else '（SDK 默认端点）'}")
+              print(f"    key 形态     ：{shape(key_raw)}")
+              started = time.monotonic()
               try:
                   client = anthropic.Anthropic(
-                      api_key=key_raw,               # 有意不 strip：与 Tenshi 完全一致
-                      base_url=base_raw or None,
-                      max_retries=0,
-                      timeout=15.0,
+                      api_key=key_raw, base_url=base_raw or None, max_retries=0, timeout=15.0
                   )
                   client.messages.create(
                       model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "ping"}]
                   )
-                  print("    → 调用成功（该通路的 secret 形态与网络都没问题）")
+                  print(f"    → 调用成功（{time.monotonic() - started:.1f}s）")
               except Exception as exc:  # noqa: BLE001
-                  print(f"    → {type(exc).__name__}: {redact(str(exc))[:200]}")
-                  cause = exc.__cause__
-                  depth = 0
+                  print(f"    → {type(exc).__name__}: {redact(str(exc))[:160]}（{time.monotonic() - started:.1f}s）")
+                  cause, depth = exc.__cause__, 0
                   while cause is not None and depth < 3:
-                      print(f"      cause[{depth}]: {type(cause).__name__}: {redact(str(cause))[:240]}")
-                      cause = cause.__cause__
-                      depth += 1
+                      print(f"      cause[{depth}]: {type(cause).__name__}: {redact(str(cause))[:200]}")
+                      cause, depth = cause.__cause__, depth + 1
+
+          print("\n########## B) Tenshi 同款 pre-flight 复现（并行 + 流式 + 10s 超时）##########")
+          print("Tenshi 的做法：ThreadPoolExecutor 并行 ping 每个 key，claude-haiku-4-5 + max_tokens=5，")
+          print("流式取首字，httpx.Timeout(connect=5, read/write/pool=10)，10s 内没首字就判死。")
+
+          def tenshi_ping(entry):
+              name, base_raw, key_raw, key_from = resolve(entry)
+              if not key_raw:
+                  return name, "未配置", 0.0, None
+              started = time.monotonic()
+              try:
+                  client = anthropic.Anthropic(
+                      api_key=key_raw,
+                      base_url=base_raw or None,
+                      max_retries=0,
+                      timeout=httpx.Timeout(connect=5.0, read=10.0, write=10.0, pool=10.0),
+                  )
+                  with client.messages.stream(
+                      model="claude-haiku-4-5",
+                      max_tokens=5,
+                      messages=[{"role": "user", "content": "ping"}],
+                  ) as stream:
+                      for _ in stream.text_stream:
+                          break
+                  return name, "OK（拿到首字）", time.monotonic() - started, None
+              except Exception as exc:  # noqa: BLE001
+                  return name, f"{type(exc).__name__}: {redact(str(exc))[:120]}", time.monotonic() - started, exc
+
+          with ThreadPoolExecutor(max_workers=4, thread_name_prefix="tenshi-ping") as pool:
+              results = list(pool.map(tenshi_ping, TARGETS))
+          for name, outcome, elapsed, exc in results:
+              print(f"  [并行] {name:<15} {outcome}（{elapsed:.2f}s）")
+              cause, depth = (exc.__cause__ if exc else None), 0
+              while cause is not None and depth < 3:
+                  print(f"          cause[{depth}]: {type(cause).__name__}: {redact(str(cause))[:200]}")
+                  cause, depth = cause.__cause__, depth + 1
+
+          print("\n########## C) 同一批 target 串行再来一次（对照：是不是并发才挂）##########")
+          for entry in TARGETS:
+              name, outcome, elapsed, exc = tenshi_ping(entry)
+              print(f"  [串行] {name:<15} {outcome}（{elapsed:.2f}s）")
           PY
 
       - name: Compare host vs container
