@@ -536,30 +536,67 @@ jobs:
         env:
           HOST_EXIT: ${{ steps.probe.outputs.exit_code }}
           CONTAINER_EXIT: ${{ steps.probe_container.outputs.exit_code }}
+          FAIL_ON_UNREACHABLE: ${{ github.event.inputs.fail_on_unreachable || 'true' }}
         run: |
           set -uo pipefail
-          host="${HOST_EXIT:-}"
-          container="${CONTAINER_EXIT:-}"
-          echo "宿主 runner 退出码：${host:-<未运行>}"
-          echo "Tenshi 容器退出码：${container:-<未运行/被跳过>}"
+          echo "宿主 runner 退出码：${HOST_EXIT:-<未上报>}；Tenshi 容器退出码：${CONTAINER_EXIT:-<未上报/被跳过>}"
 
-          # 容器才是 Tenshi 的真实运行环境，它的结论优先
-          if [ "$container" = "1" ]; then
-            echo "::error::Tenshi 运行容器内存在不可用的 Claude 通路 —— 这正是运行时 Claude 全链失败的原因；详见 Step Summary / 对照报告"
-            exit 1
-          fi
-          if [ "$host" = "1" ]; then
-            echo "::error::宿主 runner 上存在不可用的 Claude 通路 —— 详见 Step Summary / 报告"
-            exit 1
-          fi
-          if [ "$container" = "2" ] && [ "$host" = "2" ]; then
-            echo "::warning::没有任何 Claude 通路被配置（secrets 缺失），本次未做检测。"
-            exit 0
-          fi
-          for code in "$host" "$container"; do
-            case "$code" in
-              ""|0|1|2) ;;
-              *) echo "::error::探测脚本异常退出（code=$code），请查看日志。"; exit 1 ;;
-            esac
-          done
-          echo "✅ 两种环境下已配置的 Claude 通路全部可用。"
+          # 判定**只看报告本身**，不依赖 steps.*.outputs：
+          # 一旦某步输出没能上报（空串），依赖输出的写法会把它当成功 —— 等于闹钟失灵
+          # （2026-09-15 实测踩到：Proxy2 DNS 失败却判成「全部可用」）。
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          base = pathlib.Path(os.environ.get("REPORT_DIR", "reports/claude-proxy-reachability"))
+          strict = (os.environ.get("FAIL_ON_UNREACHABLE") or "true") == "true"
+
+          sides = {}
+          for side in ("host", "container"):
+              path = base / side / "latest.json"
+              if not path.exists():
+                  sides[side] = None
+                  continue
+              try:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+              except Exception as exc:  # noqa: BLE001
+                  print(f"::error::{side} 报告无法解析：{type(exc).__name__}: {exc}")
+                  sys.exit(1)
+              env = (data.get("context") or {}).get("environment") or side
+              verdicts = {
+                  k: v for k, v in (data.get("verdicts") or {}).items() if v != "not_configured"
+              }
+              bad = {k: v for k, v in verdicts.items() if v != "ok"}
+              sides[side] = {"env": env, "verdicts": verdicts, "bad": bad}
+
+          for side, info in sides.items():
+              if info is None:
+                  print(f"  {side}: 没有报告（未运行 / 被跳过）")
+                  continue
+              good = [k for k, v in info["verdicts"].items() if v == "ok"]
+              print(
+                  f"  {info['env']}: 可用 {len(good)}/{len(info['verdicts'])}"
+                  + (f" · 异常 {info['bad']}" if info["bad"] else "")
+              )
+
+          if not [i for i in sides.values() if i and i["verdicts"]]:
+              print("::warning::没有任何 Claude 通路被配置（secrets 缺失），本次未做检测。")
+              sys.exit(0)
+
+          container_bad = sides["container"]["bad"] if sides["container"] else {}
+          host_bad = sides["host"]["bad"] if sides["host"] else {}
+          level = "error" if strict else "warning"
+
+          if container_bad:
+              print(
+                  f"::{level}::Tenshi 运行容器内存在不可用的 Claude 通路 "
+                  f"{container_bad} —— 这正是运行时 Claude 全链失败的原因；详见 Step Summary / 对照报告"
+              )
+              sys.exit(1 if strict else 0)
+          if host_bad:
+              print(f"::{level}::宿主 runner 上存在不可用的 Claude 通路 {host_bad} —— 详见 Step Summary / 报告")
+              sys.exit(1 if strict else 0)
+          print("✅ 两种环境下已配置的 Claude 通路全部可用。")
+          PY
