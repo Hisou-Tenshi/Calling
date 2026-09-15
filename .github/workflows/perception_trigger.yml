@@ -232,8 +232,9 @@ jobs:
           # `--sparse` 保证白名单外的路径也不会被静默拒绝。
           # 与 telegram_webhook 保持同一份清单：感知层现在也会补跑回复引擎，
           # 它会写 image_analysis_cache / knowledge_base / downloads。
-          # data/perception_state.json：纯沉默时唯一会变动的文件（沉默时刻），
-          # 必须提交，否则冷却窗口在 Calling 侧反复归零、触发间隔跟着变。
+          # data/perception_state.json：沉默时刻（冷却/触发间隔计算的输入）。
+          # 纯沉默时它是本轮唯一会变动的文件，同样必须提交推送——只写本地不推送，
+          # 下一次全新 checkout 会读回旧值，冷却窗口等于失效、触发间隔随之变宽。
           git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/perception_state.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep >/dev/null 2>&1 || true
           git commit -m "天子感知层：世界观测日志 [skip ci]" >/dev/null 2>&1 || true
 
