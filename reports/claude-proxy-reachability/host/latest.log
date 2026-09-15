@@ -1,56 +1,56 @@
 ==============================================================================
 Claude 代理可达性检测（Calling）
-  时间(UTC) : 2026-09-15T02:16:16+00:00
-  运行环境  : 宿主 runner · GitHub Actions 1000012222 / Linux 6.17.0-1022-azure / Python 3.12.3
-  GitHub    : {'run_id': '34920526991', 'run_attempt': '1', 'workflow': 'Claude Proxy Reachability', 'event': 'workflow_dispatch', 'repository': 'Hisou-Tenshi/Calling', 'sha': '14044c9b933726edde430a67479418ce4406dde3'}
+  时间(UTC) : 2026-09-15T02:40:45+00:00
+  运行环境  : 宿主 runner · GitHub Actions 1000012227 / Linux 6.17.0-1022-azure / Python 3.12.3
+  GitHub    : {'run_id': '34922091432', 'run_attempt': '1', 'workflow': 'Claude Proxy Reachability', 'event': 'workflow_dispatch', 'repository': 'Hisou-Tenshi/Calling', 'sha': 'a67d6cc3528d79de10e7e0c987926af81b87daf0'}
   探测模型  : claude-opus-4-6、claude-sonnet-4-6、claude-3-5-sonnet-20241022 · messages × 3（开启）
 ==============================================================================
 [出口] 探测 runner 公网出口 IP…
-  → 172.190.126.117
+  → 13.89.127.133
 [通路] 共 5 个，其中已配置 5 个
   → Proxy1/Base  https://codeyu.shop  key=sk-1…33ac（len=67）（来源 CLAUDE_PROXY_KEY_BASE）
-    DNS : 64.83.15.230 (IPv4)  11.2ms
-    TCP : OK 64.83.15.230:443  65.7ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 165.8ms
-    GET  https://codeyu.shop/v1/models → status=200 205.1ms
+    DNS : 64.83.15.230 (IPv4)  37.8ms
+    TCP : OK 64.83.15.230:443  68.8ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 106.3ms
+    GET  https://codeyu.shop/v1/models → status=200 171.4ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 2167.3ms body={"id":"msg_011Cf4RLEnvQpFs22HH51FcD","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"max_tokens","model":"claude-opus-4-6","usage":{"input_tokens":1,"outpu
-      [复测 2/3] status=200 2348.7ms
-      [复测 3/3] status=200 2754.2ms
+      [model=claude-opus-4-6] status=200 2546.6ms body={"id":"msg_716c6ce29b6f4f75a49ab2579831269f","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","model":"claude-opus-4-6","usage":{"input_tokens":3,
+      [复测 2/3] status=200 1876.7ms
+      [复测 3/3] status=200 1800.8ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy1/Prime  https://codeyu.shop  key=sk-9…c44c（len=67）（来源 CLAUDE_PROXY_KEY_PRIME）
-    DNS : 64.83.15.230 (IPv4)  9.1ms
-    TCP : OK 64.83.15.230:443  82.8ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 159.5ms
-    GET  https://codeyu.shop/v1/models → status=200 198.5ms
+    DNS : 64.83.15.230 (IPv4)  28.9ms
+    TCP : OK 64.83.15.230:443  103.9ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 126.5ms
+    GET  https://codeyu.shop/v1/models → status=200 154.8ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 227.7ms body={"id":"msg_01CZe8QF7aq5KorUd5SLuACqgQ","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_detai
-      [复测 2/3] status=200 216.4ms
-      [复测 3/3] status=200 222.0ms
+      [model=claude-opus-4-6] status=200 225.1ms body={"id":"msg_01yQEssfw2fbkvjp7kwYiSCaX6","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_detai
+      [复测 2/3] status=200 188.7ms
+      [复测 3/3] status=200 189.7ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy1/Max  https://codeyu.shop  key=sk-e…596f（len=67）（来源 CLAUDE_PROXY_KEY_MAX）
-    DNS : 64.83.15.230 (IPv4)  14.4ms
-    TCP : OK 64.83.15.230:443  59.3ms
-    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 160.2ms
-    GET  https://codeyu.shop/v1/models → status=200 196.2ms
+    DNS : 64.83.15.230 (IPv4)  4.1ms
+    TCP : OK 64.83.15.230:443  85.1ms
+    TLS : TLSv1.3 / TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · 证书 codeyu.shop ← YE1 · 75 天后到期 · 133.7ms
+    GET  https://codeyu.shop/v1/models → status=200 141.5ms
     POST https://codeyu.shop/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 2637.1ms body={"id":"msg_011Cf4RMpzfRs7gSpveBFaYR","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management"
-      [复测 2/3] status=200 2952.7ms
-      [复测 3/3] status=200 2238.5ms
+      [model=claude-opus-4-6] status=200 2851.9ms body={"id":"msg_011Cf4TFqxEtDn3cQTiZPrJI","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management"
+      [复测 2/3] status=200 3102.3ms
+      [复测 3/3] status=200 2422.2ms
     [结论] ✅ 可用 —— 可达且可调用
   → Proxy2  https://cursor.scihub.edu.kg/api  key=cr_0…d189（len=67）（来源 CLAUDE_PROXY_KEY_2）
-    DNS : gaierror: [Errno -2] Name or service not known  539.2ms
+    DNS : gaierror: [Errno -2] Name or service not known  449.8ms
     [跳过] 网络层已不可达，不再发 HTTP 请求（结论已确定）
     [结论] ❌ DNS 失败 —— DNS 解析失败：gaierror: [Errno -2] Name or service not known
   → Official  https://api.anthropic.com  key=sk-a…XwAA（len=108）（来源 CLAUDE_API_KEY）
-    DNS : 160.79.104.10 (IPv4)/2607:6bc0::10 (IPv6)  2.5ms
-    TCP : OK 160.79.104.10:443  2.4ms
-    TLS : TLSv1.3 / TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · 证书 api.anthropic.com ← WE1 · 37 天后到期 · 41.6ms
-    GET  https://api.anthropic.com/v1/models → status=200 164.7ms
+    DNS : 160.79.104.10 (IPv4)/2607:6bc0::10 (IPv6)  5.2ms
+    TCP : OK 160.79.104.10:443  18.3ms
+    TLS : TLSv1.3 / TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · 证书 api.anthropic.com ← WE1 · 37 天后到期 · 53.3ms
+    GET  https://api.anthropic.com/v1/models → status=200 246.5ms
     POST https://api.anthropic.com/v1/messages  max_tokens=1  候选模型 ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-3-5-sonnet-20241022']
-      [model=claude-opus-4-6] status=200 1826.6ms body={"model":"claude-opus-4-6","id":"msg_011Cf4RMx5AEjzTgyh839yWS","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"us
-      [复测 2/3] status=200 1713.5ms
-      [复测 3/3] status=200 1472.4ms
+      [model=claude-opus-4-6] status=200 1842.0ms body={"model":"claude-opus-4-6","id":"msg_011Cf4TEFHFwkkdrfpBUWHA5","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"us
+      [复测 2/3] status=200 2683.5ms
+      [复测 3/3] status=200 2879.2ms
     [结论] ✅ 可用 —— 可达且可调用
 ==============================================================================
 汇总：已配置 5 个 · 可用 4 个 · 异常 1 个
