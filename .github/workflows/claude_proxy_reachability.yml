@@ -265,6 +265,28 @@ jobs:
               ("Official", "", ("CLAUDE_API_KEY",)),
           ]
 
+          FAILURES: list = []
+
+          def _fixcheck_client(timeout):
+              return anthropic.Anthropic(
+                  api_key="sk-ant-fixcheck",
+                  base_url="https://fixcheck.invalid",
+                  max_retries=0,
+                  timeout=timeout,
+              )
+
+          def _create(timeout):
+              _fixcheck_client(timeout).messages.create(
+                  model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "ping"}]
+              )
+
+          def _stream(timeout):
+              with _fixcheck_client(timeout).messages.stream(
+                  model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "ping"}]
+              ) as stream:
+                  for _ in stream.text_stream:
+                      break
+
           def resolve(entry):
               name, base_env, key_envs = entry
               base_raw = "https://api.anthropic.com" if not base_env else (os.getenv(base_env) or "")
@@ -344,6 +366,51 @@ jobs:
           for entry in TARGETS:
               name, outcome, elapsed, exc = tenshi_ping(entry)
               print(f"  [串行] {name:<15} {outcome}（{elapsed:.2f}s）")
+
+          print("\n########## D) 修复验证：timeout 必须按 SDK 自己的 http 模块构造 ##########")
+          # Tenshi 侧已改成 src/sdk_compat.build_sdk_timeout()：问 SDK 要它自己用的 http 模块
+          # （anthropic._base_client.httpx），而不是自己 import httpx。这里在同一个镜像里实测这条路径。
+          sdk_http = getattr(getattr(anthropic, "_base_client", None), "httpx", None)
+          if sdk_http is None:
+              try:
+                  import httpx2 as sdk_http  # type: ignore[no-redef]
+              except Exception:
+                  import httpx as sdk_http  # type: ignore[no-redef]
+          print(f"  SDK 实际使用的 http 模块：{sdk_http.__name__}（版本 {getattr(sdk_http, '__version__', '?')}）")
+          print(f"  代码本机 import 的 httpx ：{httpx.__name__}（版本 {getattr(httpx, '__version__', '?')}）")
+
+          def _probe_timeout(timeout, label):
+              for path_name, call in (("create", _create), ("stream", _stream)):
+                  try:
+                      call(timeout)
+                      print(f"  ✅ {label} + {path_name} 通过（未在本地被拒）")
+                  except TypeError as exc:
+                      print(f"  ❌ {label} + {path_name} 被本地拒绝：{exc}")
+                      FAILURES.append(f"修复验证失败：{label} + {path_name} 被本地拒绝：{exc}")
+                  except Exception as exc:  # noqa: BLE001
+                      print(f"  ✅ {label} + {path_name} 走到网络层（{type(exc).__name__}）")
+
+          _probe_timeout(
+              sdk_http.Timeout(connect=5.0, read=10.0, write=10.0, pool=10.0),
+              f"sdk_compat 做法（{sdk_http.__name__}.Timeout）",
+          )
+          _probe_timeout(10.0, "兜底做法（纯秒数）")
+
+          if sdk_http is not httpx:
+              try:
+                  _create(httpx.Timeout(connect=5.0, read=10.0, write=10.0, pool=10.0))
+                  print("  ⚠️ 旧写法（httpx.Timeout）在本镜像里居然也被接受——SDK 行为已变，请复核 sdk_compat")
+              except TypeError as exc:
+                  print(f"  ✅ 已确认旧写法会被本地拒绝（本次事故的根因）：{exc}")
+              except Exception as exc:  # noqa: BLE001
+                  print(f"  ⚠️ 旧写法未报 TypeError 而是 {type(exc).__name__}，请人工确认")
+
+          print("\n########## 复现小结 ##########")
+          if FAILURES:
+              for item in FAILURES:
+                  print(f"  ❌ {item}")
+              raise SystemExit(1)
+          print("  ✅ 修复路径（按 SDK 自己的 http 模块构造 timeout / 纯秒数兜底）在镜像内可用")
           PY
 
       - name: Compare host vs container
