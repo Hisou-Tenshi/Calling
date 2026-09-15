@@ -1,18 +1,18 @@
 {
   "context": {
-    "started_at": "2026-09-15T02:09:45+00:00",
-    "finished_at": "2026-09-15T02:10:24+00:00",
-    "runner": "GitHub Actions 1000012220",
+    "started_at": "2026-09-15T02:13:17+00:00",
+    "finished_at": "2026-09-15T02:13:53+00:00",
+    "runner": "GitHub Actions 1000012221",
     "os": "Linux 6.17.0-1022-azure",
     "environment": "宿主 runner",
     "python": "3.12.3",
     "github": {
-      "run_id": "34920103018",
+      "run_id": "34920328712",
       "run_attempt": "1",
       "workflow": "Claude Proxy Reachability",
       "event": "workflow_dispatch",
       "repository": "Hisou-Tenshi/Calling",
-      "sha": "2a53b16e2469cd7813c7c18a13ca7149fa635f85"
+      "sha": "bd7da0fdb8be9ded1a2a9b791bdca23303a6b91e"
     },
     "models": [
       "claude-opus-4-6",
@@ -24,7 +24,7 @@
     "probe_messages": true,
     "egress": {
       "ok": true,
-      "ip": "20.161.67.209",
+      "ip": "4.154.85.161",
       "source": "https://api.ipify.org"
     },
     "script": "scripts/claude_proxy_reachability.py"
@@ -37,6 +37,21 @@
       "base_url": "https://codeyu.shop",
       "key_source": "CLAUDE_PROXY_KEY_BASE",
       "key_masked": "sk-1…33ac（len=67）",
+      "key_shape": {
+        "length": 67,
+        "stripped_length": 67,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "base_url_shape": {
+        "length": 19,
+        "stripped_length": 19,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "shape_anomaly": false,
       "configured": true,
       "missing": [],
       "dns": {
@@ -47,13 +62,13 @@
           "64.83.15.230 (IPv4)"
         ],
         "error": null,
-        "latency_ms": 18.6
+        "latency_ms": 36.7
       },
       "tcp": {
         "ok": true,
         "error": null,
         "peer": "64.83.15.230:443",
-        "latency_ms": 68.6
+        "latency_ms": 44.0
       },
       "tls": {
         "ok": true,
@@ -74,14 +89,14 @@
         },
         "cert_error": null,
         "unverified_handshake_ok": null,
-        "latency_ms": 166.5
+        "latency_ms": 120.8
       },
       "models": {
         "url": "https://codeyu.shop/v1/models",
         "method": "GET",
         "status": 200,
         "ok": true,
-        "latency_ms": 241.8,
+        "latency_ms": 144.5,
         "body": "{\"data\":[{\"id\":\"claude-fable-5\",\"type\":\"model\",\"display_name\":\"claude-fable-5\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-haiku-4-5\",\"type\":\"model\",\"display_name\":\"claude-haiku-4-5\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-haiku-4-5-20251001\",\"type\":\"model\",\"display_name\":\"claude-haiku-4-5-20251001\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-opus-4-6\",\"type\":\"model\",\"display_name\":\"claude-opus-4-6\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-opus-4-7\",\"type\":\"model\",\"display_name\":\"claude-opus-4-7\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-opus-4-8\",\"t",
         "body_truncated": true,
         "error": null,
@@ -95,8 +110,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 1870.7,
-            "body": "{\"id\":\"msg_011Cf4QqRvbFZYjLxPvZz9qH\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"max_tokens\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+            "latency_ms": 3316.7,
+            "body": "{\"id\":\"msg_fb171ff6903b435cbc409e113d4429dc\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -108,8 +123,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 2160.6,
-            "body": "{\"id\":\"msg_011Cf4QqeHz8CrSYJzUDZY4T\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"max_tokens\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+            "latency_ms": 1887.7,
+            "body": "{\"id\":\"msg_011Cf4R7NHGKV7pdHXuDTVjP\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"max_tokens\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -122,8 +137,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 2449.7,
-            "body": "{\"id\":\"msg_4e3574de73dc4621a0a1c344d6073655\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}",
+            "latency_ms": 1875.4,
+            "body": "{\"id\":\"msg_011Cf4R7ah8rUNaFGAM9fxkJ\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"max_tokens\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -139,9 +154,9 @@
           200
         ],
         "latency_ms": {
-          "min": 1870.7,
-          "median": 2160.6,
-          "max": 2449.7
+          "min": 1875.4,
+          "median": 1887.7,
+          "max": 3316.7
         },
         "model": "claude-opus-4-6"
       },
@@ -152,8 +167,8 @@
           "method": "POST",
           "status": 200,
           "ok": true,
-          "latency_ms": 1870.7,
-          "body": "{\"id\":\"msg_011Cf4QqRvbFZYjLxPvZz9qH\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"max_tokens\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}",
+          "latency_ms": 3316.7,
+          "body": "{\"id\":\"msg_fb171ff6903b435cbc409e113d4429dc\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"model\":\"claude-opus-4-6\",\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}",
           "body_truncated": false,
           "error": null,
           "redirected_to": null,
@@ -171,6 +186,21 @@
       "base_url": "https://codeyu.shop",
       "key_source": "CLAUDE_PROXY_KEY_PRIME",
       "key_masked": "sk-9…c44c（len=67）",
+      "key_shape": {
+        "length": 67,
+        "stripped_length": 67,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "base_url_shape": {
+        "length": 19,
+        "stripped_length": 19,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "shape_anomaly": false,
       "configured": true,
       "missing": [],
       "dns": {
@@ -181,13 +211,13 @@
           "64.83.15.230 (IPv4)"
         ],
         "error": null,
-        "latency_ms": 23.5
+        "latency_ms": 31.3
       },
       "tcp": {
         "ok": true,
         "error": null,
         "peer": "64.83.15.230:443",
-        "latency_ms": 68.0
+        "latency_ms": 46.4
       },
       "tls": {
         "ok": true,
@@ -208,14 +238,14 @@
         },
         "cert_error": null,
         "unverified_handshake_ok": null,
-        "latency_ms": 145.6
+        "latency_ms": 101.8
       },
       "models": {
         "url": "https://codeyu.shop/v1/models",
         "method": "GET",
         "status": 200,
         "ok": true,
-        "latency_ms": 189.1,
+        "latency_ms": 112.1,
         "body": "{\"data\":[{\"id\":\"Kimi-K3\",\"type\":\"model\",\"display_name\":\"Kimi-K3\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-fable-5\",\"type\":\"model\",\"display_name\":\"claude-fable-5\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-haiku-4-5\",\"type\":\"model\",\"display_name\":\"claude-haiku-4-5\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-haiku-4-5-20251001\",\"type\":\"model\",\"display_name\":\"claude-haiku-4-5-20251001\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-opus-4-6\",\"type\":\"model\",\"display_name\":\"claude-opus-4-6\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-opus-4-7\",\"type\":\"model\",\"di",
         "body_truncated": true,
         "error": null,
@@ -229,8 +259,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 215.3,
-            "body": "{\"id\":\"msg_01m9hfyTDwMLaXh72PWTn7Kp1p\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
+            "latency_ms": 190.1,
+            "body": "{\"id\":\"msg_01atgqjQi1chiSqCkhTBoeMvE6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -242,8 +272,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 217.6,
-            "body": "{\"id\":\"msg_01yr3Las94oDtfcpX4cvU6aoRn\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
+            "latency_ms": 151.2,
+            "body": "{\"id\":\"msg_01Lzzr3VnPnMVcr6xyqxXawYr6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -256,8 +286,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 217.3,
-            "body": "{\"id\":\"msg_01kycdVvYiwQGJppCxxQ4GPSrL\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
+            "latency_ms": 159.4,
+            "body": "{\"id\":\"msg_01jZXXvisReaXN8aw8agyfak5b\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -273,9 +303,9 @@
           200
         ],
         "latency_ms": {
-          "min": 215.3,
-          "median": 217.3,
-          "max": 217.6
+          "min": 151.2,
+          "median": 159.4,
+          "max": 190.1
         },
         "model": "claude-opus-4-6"
       },
@@ -286,8 +316,8 @@
           "method": "POST",
           "status": 200,
           "ok": true,
-          "latency_ms": 215.3,
-          "body": "{\"id\":\"msg_01m9hfyTDwMLaXh72PWTn7Kp1p\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
+          "latency_ms": 190.1,
+          "body": "{\"id\":\"msg_01atgqjQi1chiSqCkhTBoeMvE6\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[{\"type\":\"text\",\"text\":\"pong\"}],\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"container\":null,\"usage\":{\"input_tokens\":8,\"output_tokens\":1,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"server_tool_use\":{\"web_search_requests\":0,\"web_fetch_requests\":0},\"service_tier\":\"standard\"},\"context_management\":{\"applied_edits\":[]}}",
           "body_truncated": false,
           "error": null,
           "redirected_to": null,
@@ -305,6 +335,21 @@
       "base_url": "https://codeyu.shop",
       "key_source": "CLAUDE_PROXY_KEY_MAX",
       "key_masked": "sk-e…596f（len=67）",
+      "key_shape": {
+        "length": 67,
+        "stripped_length": 67,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "base_url_shape": {
+        "length": 19,
+        "stripped_length": 19,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "shape_anomaly": false,
       "configured": true,
       "missing": [],
       "dns": {
@@ -315,13 +360,13 @@
           "64.83.15.230 (IPv4)"
         ],
         "error": null,
-        "latency_ms": 16.4
+        "latency_ms": 19.8
       },
       "tcp": {
         "ok": true,
         "error": null,
         "peer": "64.83.15.230:443",
-        "latency_ms": 62.3
+        "latency_ms": 52.3
       },
       "tls": {
         "ok": true,
@@ -342,14 +387,14 @@
         },
         "cert_error": null,
         "unverified_handshake_ok": null,
-        "latency_ms": 160.7
+        "latency_ms": 117.3
       },
       "models": {
         "url": "https://codeyu.shop/v1/models",
         "method": "GET",
         "status": 200,
         "ok": true,
-        "latency_ms": 215.1,
+        "latency_ms": 151.6,
         "body": "{\"data\":[{\"id\":\"claude-3-5-haiku-20241022\",\"type\":\"model\",\"display_name\":\"claude-3-5-haiku-20241022\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-3-5-sonnet-20240620\",\"type\":\"model\",\"display_name\":\"claude-3-5-sonnet-20240620\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-3-5-sonnet-20241022\",\"type\":\"model\",\"display_name\":\"claude-3-5-sonnet-20241022\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-3-7-sonnet-20250219\",\"type\":\"model\",\"display_name\":\"claude-3-7-sonnet-20250219\",\"created_at\":\"2024-01-01T00:00:00Z\"},{\"id\":\"claude-fable-5\",\"type\":\"model\",\"display_name\":\"claude-fable-5\"",
         "body_truncated": true,
         "error": null,
@@ -363,8 +408,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 2347.6,
-            "body": "{\"id\":\"msg_011Cf4Qr2zatkt9i84ebE1vN\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
+            "latency_ms": 3309.6,
+            "body": "{\"id\":\"msg_011Cf4R8gE6JYOE7fdw2EtrJ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -376,8 +421,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 13189.3,
-            "body": "{\"id\":\"msg_011Cf4QsWRbUkuJ7S11ZS3Dj\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
+            "latency_ms": 3371.7,
+            "body": "{\"id\":\"msg_011Cf4R8mcpABppuUJ4H57Bl\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -390,8 +435,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 3225.0,
-            "body": "{\"id\":\"msg_011Cf4Qua313jrImBb7joTOz\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
+            "latency_ms": 3064.0,
+            "body": "{\"id\":\"msg_011Cf4R9M42h1kY6lB2nEqKX\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -407,9 +452,9 @@
           200
         ],
         "latency_ms": {
-          "min": 2347.6,
-          "median": 3225.0,
-          "max": 13189.3
+          "min": 3064.0,
+          "median": 3309.6,
+          "max": 3371.7
         },
         "model": "claude-opus-4-6"
       },
@@ -420,8 +465,8 @@
           "method": "POST",
           "status": 200,
           "ok": true,
-          "latency_ms": 2347.6,
-          "body": "{\"id\":\"msg_011Cf4Qr2zatkt9i84ebE1vN\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
+          "latency_ms": 3309.6,
+          "body": "{\"id\":\"msg_011Cf4R8gE6JYOE7fdw2EtrJ\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"context_management\":{\"applied_edits\":[]},\"usage\":{\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,\"ephemeral_5m_input_tokens\":0},\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"inference_geo\":\"not_available\",\"input_tokens\":19,\"output_tokens\":1,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\"}}",
           "body_truncated": false,
           "error": null,
           "redirected_to": null,
@@ -439,6 +484,21 @@
       "base_url": "https://cursor.scihub.edu.kg/api",
       "key_source": "CLAUDE_PROXY_KEY_2",
       "key_masked": "cr_0…d189（len=67）",
+      "key_shape": {
+        "length": 67,
+        "stripped_length": 67,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "base_url_shape": {
+        "length": 32,
+        "stripped_length": 32,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "shape_anomaly": false,
       "configured": true,
       "missing": [],
       "dns": {
@@ -447,7 +507,7 @@
         "port": 443,
         "addresses": [],
         "error": "gaierror: [Errno -2] Name or service not known",
-        "latency_ms": 553.4
+        "latency_ms": 615.0
       },
       "tcp": null,
       "tls": null,
@@ -465,6 +525,15 @@
       "base_url": "https://api.anthropic.com",
       "key_source": "CLAUDE_API_KEY",
       "key_masked": "sk-a…XwAA（len=108）",
+      "key_shape": {
+        "length": 108,
+        "stripped_length": 108,
+        "has_surrounding_whitespace": false,
+        "control_chars": 0,
+        "non_ascii": 0
+      },
+      "base_url_shape": null,
+      "shape_anomaly": false,
       "configured": true,
       "missing": [],
       "dns": {
@@ -476,13 +545,13 @@
           "2607:6bc0::10 (IPv6)"
         ],
         "error": null,
-        "latency_ms": 2.1
+        "latency_ms": 13.9
       },
       "tcp": {
         "ok": true,
         "error": null,
         "peer": "160.79.104.10:443",
-        "latency_ms": 5.8
+        "latency_ms": 6.1
       },
       "tls": {
         "ok": true,
@@ -503,14 +572,14 @@
         },
         "cert_error": null,
         "unverified_handshake_ok": null,
-        "latency_ms": 50.2
+        "latency_ms": 48.6
       },
       "models": {
         "url": "https://api.anthropic.com/v1/models",
         "method": "GET",
         "status": 200,
         "ok": true,
-        "latency_ms": 171.2,
+        "latency_ms": 255.9,
         "body": "{\"data\":[{\"type\":\"model\",\"id\":\"claude-fable-5-1\",\"display_name\":\"Claude Fable 5.1\",\"created_at\":\"2026-08-28T00:00:00Z\",\"max_input_tokens\":1000000,\"max_tokens\":128000,\"capabilities\":{\"batch\":{\"supported\":true},\"citations\":{\"supported\":true},\"code_execution\":{\"supported\":true},\"context_management\":{\"supported\":true,\"clear_tool_uses_20250919\":{\"supported\":true},\"clear_thinking_20251015\":{\"supported\":true},\"compact_20260112\":{\"supported\":true}},\"effort\":{\"supported\":true,\"low\":{\"supported\":true},\"medium\":{\"supported\":true},\"high\":{\"supported\":true},\"xhigh\":{\"supported\":true},\"max\":{\"supported\":tru",
         "body_truncated": true,
         "error": null,
@@ -524,8 +593,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 1146.0,
-            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4QsuFDUWatdM6hHfUPS\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
+            "latency_ms": 2076.6,
+            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4R8tTFUBx26eFWb5o39\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -537,8 +606,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 964.8,
-            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4Qt4JfcmjXWkCcvUA9A\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
+            "latency_ms": 3415.4,
+            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4R97SrFaw433wARfToe\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -551,8 +620,8 @@
             "method": "POST",
             "status": 200,
             "ok": true,
-            "latency_ms": 901.8,
-            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4QtCfxWZFrgsc1a4UHr\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
+            "latency_ms": 2835.6,
+            "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4R9SHgAx9tom3JD1Hf5\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
             "body_truncated": false,
             "error": null,
             "redirected_to": null,
@@ -568,9 +637,9 @@
           200
         ],
         "latency_ms": {
-          "min": 901.8,
-          "median": 964.8,
-          "max": 1146.0
+          "min": 2076.6,
+          "median": 2835.6,
+          "max": 3415.4
         },
         "model": "claude-opus-4-6"
       },
@@ -581,8 +650,8 @@
           "method": "POST",
           "status": 200,
           "ok": true,
-          "latency_ms": 1146.0,
-          "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4QsuFDUWatdM6hHfUPS\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
+          "latency_ms": 2076.6,
+          "body": "{\"model\":\"claude-opus-4-6\",\"id\":\"msg_011Cf4R8tTFUBx26eFWb5o39\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"container\":null,\"stop_reason\":\"max_tokens\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":8,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":1,\"service_tier\":\"standard\",\"inference_geo\":\"global\"}}",
           "body_truncated": false,
           "error": null,
           "redirected_to": null,

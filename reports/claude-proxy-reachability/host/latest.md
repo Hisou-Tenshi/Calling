@@ -2,10 +2,10 @@
 
 | 项目 | 值 |
 |---|---|
-| 检测时间（UTC） | `2026-09-15T02:09:45+00:00` |
-| 运行环境 | **宿主 runner** · `GitHub Actions 1000012220` / `Linux 6.17.0-1022-azure` / Python `3.12.3` |
-| GitHub | run `34920103018` · workflow `Claude Proxy Reachability` · event `workflow_dispatch` · sha `2a53b16e` |
-| Runner 出口 IP | `20.161.67.209` |
+| 检测时间（UTC） | `2026-09-15T02:13:17+00:00` |
+| 运行环境 | **宿主 runner** · `GitHub Actions 1000012221` / `Linux 6.17.0-1022-azure` / Python `3.12.3` |
+| GitHub | run `34920328712` · workflow `Claude Proxy Reachability` · event `workflow_dispatch` · sha `bd7da0fd` |
+| Runner 出口 IP | `4.154.85.161` |
 | 探测模型 | `claude-opus-4-6、claude-sonnet-4-6、claude-3-5-sonnet-20241022`（max_tokens=1，每通路最多 3 次） |
 
 ## 结论
@@ -18,11 +18,11 @@
 
 | 通路 | 说明 | 配置 | DNS | TCP | TLS | HTTP(messages) | 延迟 min/中位/max | 结论 |
 |---|---|---|---|---|---|---|---|---|
-| `Proxy1/Base` | 代理1 base 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 1870.7 / 2160.6 / 2449.7 ms | ✅ 可用 |
-| `Proxy1/Prime` | 代理1 prime 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 215.3 / 217.3 / 217.6 ms | ✅ 可用 |
-| `Proxy1/Max` | 代理1 max 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 2347.6 / 3225.0 / 13189.3 ms | ✅ 可用 |
+| `Proxy1/Base` | 代理1 base 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 1875.4 / 1887.7 / 3316.7 ms | ✅ 可用 |
+| `Proxy1/Prime` | 代理1 prime 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 151.2 / 159.4 / 190.1 ms | ✅ 可用 |
+| `Proxy1/Max` | 代理1 max 档 | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 3064.0 / 3309.6 / 3371.7 ms | ✅ 可用 |
 | `Proxy2` | 代理2（独立域名） | ✅ | ❌ | — | — | —（无响应） | — | ❌ DNS 失败 |
-| `Official` | Anthropic 官方（对照组） | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 901.8 / 964.8 / 1146.0 ms | ✅ 可用 |
+| `Official` | Anthropic 官方（对照组） | ✅ | ✅ | ✅ | ✅ | 200、200、200 | 2076.6 / 2835.6 / 3415.4 ms | ✅ 可用 |
 
 ## 通路明细
 
@@ -31,19 +31,19 @@
 - base_url：`https://codeyu.shop`
 - key：`sk-1…33ac（len=67）`（来自 `CLAUDE_PROXY_KEY_BASE`）
 - 结论：**✅ 可用** —— 可达且可调用
-- DNS：64.83.15.230 (IPv4)（18.6 ms）
-- TCP：连通 64.83.15.230:443（68.6 ms）
-- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（166.5 ms）
+- DNS：64.83.15.230 (IPv4)（36.7 ms）
+- TCP：连通 64.83.15.230:443（44.0 ms）
+- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（120.8 ms）
 - 证书：`codeyu.shop` ← `YE1`（Let's Encrypt） · 到期 `Nov 29 23:35:39 2026 GMT`（剩 75 天） · SAN：codeyu.shop
-- `GET /v1/models`：HTTP `200` · 241.8 ms
-- `POST /v1/messages`：状态码 200、200、200 · 延迟 1870.7/2160.6/2449.7 ms · 实际使用模型 `claude-opus-4-6`
+- `GET /v1/models`：HTTP `200` · 144.5 ms
+- `POST /v1/messages`：状态码 200、200、200 · 延迟 1875.4/1887.7/3316.7 ms · 实际使用模型 `claude-opus-4-6`
 - 模型探测记录：
-  - `claude-opus-4-6` → HTTP `200` · 1870.7 ms
+  - `claude-opus-4-6` → HTTP `200` · 3316.7 ms
 
   <details><summary>最后一次响应体（截断）</summary>
 
   ```json
-  {"id":"msg_4e3574de73dc4621a0a1c344d6073655","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","model":"claude-opus-4-6","usage":{"input_tokens":3,"output_tokens":1}}
+  {"id":"msg_011Cf4R7ah8rUNaFGAM9fxkJ","type":"message","role":"assistant","content":[{"type":"text","text":"pong"}],"stop_reason":"max_tokens","model":"claude-opus-4-6","usage":{"input_tokens":1,"output_tokens":1}}
   ```
 
   </details>
@@ -53,19 +53,19 @@
 - base_url：`https://codeyu.shop`
 - key：`sk-9…c44c（len=67）`（来自 `CLAUDE_PROXY_KEY_PRIME`）
 - 结论：**✅ 可用** —— 可达且可调用
-- DNS：64.83.15.230 (IPv4)（23.5 ms）
-- TCP：连通 64.83.15.230:443（68.0 ms）
-- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（145.6 ms）
+- DNS：64.83.15.230 (IPv4)（31.3 ms）
+- TCP：连通 64.83.15.230:443（46.4 ms）
+- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（101.8 ms）
 - 证书：`codeyu.shop` ← `YE1`（Let's Encrypt） · 到期 `Nov 29 23:35:39 2026 GMT`（剩 75 天） · SAN：codeyu.shop
-- `GET /v1/models`：HTTP `200` · 189.1 ms
-- `POST /v1/messages`：状态码 200、200、200 · 延迟 215.3/217.3/217.6 ms · 实际使用模型 `claude-opus-4-6`
+- `GET /v1/models`：HTTP `200` · 112.1 ms
+- `POST /v1/messages`：状态码 200、200、200 · 延迟 151.2/159.4/190.1 ms · 实际使用模型 `claude-opus-4-6`
 - 模型探测记录：
-  - `claude-opus-4-6` → HTTP `200` · 215.3 ms
+  - `claude-opus-4-6` → HTTP `200` · 190.1 ms
 
   <details><summary>最后一次响应体（截断）</summary>
 
   ```json
-  {"id":"msg_01kycdVvYiwQGJppCxxQ4GPSrL","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"container":null,"usage":{"input_tokens":8,"output_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard"},"context_management":{"applied_edits":[]}}
+  {"id":"msg_01jZXXvisReaXN8aw8agyfak5b","type":"message","role":"assistant","model":"claude-opus-4-6","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","stop_sequence":null,"stop_details":null,"container":null,"usage":{"input_tokens":8,"output_tokens":1,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard"},"context_management":{"applied_edits":[]}}
   ```
 
   </details>
@@ -75,19 +75,19 @@
 - base_url：`https://codeyu.shop`
 - key：`sk-e…596f（len=67）`（来自 `CLAUDE_PROXY_KEY_MAX`）
 - 结论：**✅ 可用** —— 可达且可调用
-- DNS：64.83.15.230 (IPv4)（16.4 ms）
-- TCP：连通 64.83.15.230:443（62.3 ms）
-- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（160.7 ms）
+- DNS：64.83.15.230 (IPv4)（19.8 ms）
+- TCP：连通 64.83.15.230:443（52.3 ms）
+- TLS：TLSv1.3 · TLS_AES_128_GCM_SHA256 (TLSv1.3, 128 bits) · ALPN=http/1.1（117.3 ms）
 - 证书：`codeyu.shop` ← `YE1`（Let's Encrypt） · 到期 `Nov 29 23:35:39 2026 GMT`（剩 75 天） · SAN：codeyu.shop
-- `GET /v1/models`：HTTP `200` · 215.1 ms
-- `POST /v1/messages`：状态码 200、200、200 · 延迟 2347.6/3225.0/13189.3 ms · 实际使用模型 `claude-opus-4-6`
+- `GET /v1/models`：HTTP `200` · 151.6 ms
+- `POST /v1/messages`：状态码 200、200、200 · 延迟 3064.0/3309.6/3371.7 ms · 实际使用模型 `claude-opus-4-6`
 - 模型探测记录：
-  - `claude-opus-4-6` → HTTP `200` · 2347.6 ms
+  - `claude-opus-4-6` → HTTP `200` · 3309.6 ms
 
   <details><summary>最后一次响应体（截断）</summary>
 
   ```json
-  {"id":"msg_011Cf4Qua313jrImBb7joTOz","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management":{"applied_edits":[]},"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"inference_geo":"not_available","input_tokens":19,"output_tokens":1,"output_tokens_details":{"thinking_tokens":0},"service_tier":"standard"}}
+  {"id":"msg_011Cf4R9M42h1kY6lB2nEqKX","type":"message","role":"assistant","model":"claude-opus-4-6","content":[],"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"context_management":{"applied_edits":[]},"usage":{"cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"inference_geo":"not_available","input_tokens":19,"output_tokens":1,"output_tokens_details":{"thinking_tokens":0},"service_tier":"standard"}}
   ```
 
   </details>
@@ -97,29 +97,43 @@
 - base_url：`https://cursor.scihub.edu.kg/api`
 - key：`cr_0…d189（len=67）`（来自 `CLAUDE_PROXY_KEY_2`）
 - 结论：**❌ DNS 失败** —— DNS 解析失败：gaierror: [Errno -2] Name or service not known
-- DNS：无记录（553.4 ms） · gaierror: [Errno -2] Name or service not known
+- DNS：无记录（615.0 ms） · gaierror: [Errno -2] Name or service not known
 
 ### `Official`（Anthropic 官方（对照组））
 
 - base_url：`https://api.anthropic.com`
 - key：`sk-a…XwAA（len=108）`（来自 `CLAUDE_API_KEY`）
 - 结论：**✅ 可用** —— 可达且可调用
-- DNS：160.79.104.10 (IPv4)、2607:6bc0::10 (IPv6)（2.1 ms）
-- TCP：连通 160.79.104.10:443（5.8 ms）
-- TLS：TLSv1.3 · TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · ALPN=http/1.1（50.2 ms）
+- DNS：160.79.104.10 (IPv4)、2607:6bc0::10 (IPv6)（13.9 ms）
+- TCP：连通 160.79.104.10:443（6.1 ms）
+- TLS：TLSv1.3 · TLS_AES_256_GCM_SHA384 (TLSv1.3, 256 bits) · ALPN=http/1.1（48.6 ms）
 - 证书：`api.anthropic.com` ← `WE1`（Google Trust Services） · 到期 `Oct 22 19:00:52 2026 GMT`（剩 37 天） · SAN：api.anthropic.com
-- `GET /v1/models`：HTTP `200` · 171.2 ms
-- `POST /v1/messages`：状态码 200、200、200 · 延迟 901.8/964.8/1146.0 ms · 实际使用模型 `claude-opus-4-6`
+- `GET /v1/models`：HTTP `200` · 255.9 ms
+- `POST /v1/messages`：状态码 200、200、200 · 延迟 2076.6/2835.6/3415.4 ms · 实际使用模型 `claude-opus-4-6`
 - 模型探测记录：
-  - `claude-opus-4-6` → HTTP `200` · 1146.0 ms
+  - `claude-opus-4-6` → HTTP `200` · 2076.6 ms
 
   <details><summary>最后一次响应体（截断）</summary>
 
   ```json
-  {"model":"claude-opus-4-6","id":"msg_011Cf4QtCfxWZFrgsc1a4UHr","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":8,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"global"}}
+  {"model":"claude-opus-4-6","id":"msg_011Cf4R9SHgAx9tom3JD1Hf5","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":8,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"output_tokens":1,"service_tier":"standard","inference_geo":"global"}}
   ```
 
   </details>
+
+## 密钥形态体检
+
+> 只统计「形态」（长度 / 首尾空白 / 控制字符 / 非 ASCII），**不输出任何密钥内容**。
+> secret 里带换行或首尾空白时，anthropic SDK 会在本地就构造失败，症状正是
+> `APIConnectionError: Connection error.`，很容易被误判成网络/代理故障。
+
+| 通路 | 来源变量 | key（掩码） | key 形态 | base_url 形态 |
+|---|---|---|---|---|
+| `Proxy1/Base` | CLAUDE_PROXY_KEY_BASE | `sk-1…33ac（len=67）` | len=67 · 形态正常 | len=19 · 形态正常 |
+| `Proxy1/Prime` | CLAUDE_PROXY_KEY_PRIME | `sk-9…c44c（len=67）` | len=67 · 形态正常 | len=19 · 形态正常 |
+| `Proxy1/Max` | CLAUDE_PROXY_KEY_MAX | `sk-e…596f（len=67）` | len=67 · 形态正常 | len=19 · 形态正常 |
+| `Proxy2` | CLAUDE_PROXY_KEY_2 | `cr_0…d189（len=67）` | len=67 · 形态正常 | len=32 · 形态正常 |
+| `Official` | CLAUDE_API_KEY | `sk-a…XwAA（len=108）` | len=108 · 形态正常 | — |
 
 ## 判定口径与建议
 
