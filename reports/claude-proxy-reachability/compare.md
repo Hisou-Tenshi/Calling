@@ -1,7 +1,7 @@
 # Claude 代理可达性对照报告（两种运行环境）
 
-- A（基线）：宿主 runner（A：GitHub Actions 1000012227）
-- B（对照）：Tenshi 运行容器（B：b1ea295869f3）
+- A（基线）：宿主 runner（A：GitHub Actions 1000012229）
+- B（对照）：Tenshi 运行容器（B：1090eaf0f052）
 
 ## 结论
 
