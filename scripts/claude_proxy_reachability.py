@@ -142,6 +142,48 @@ def elapsed_ms(start: float) -> float:
     return round((time.perf_counter() - start) * 1000.0, 1)
 
 
+def _secret_shape(value: str | None) -> dict:
+    """只看「形态」，绝不输出内容：长度、首尾空白、控制字符、非 ASCII。
+
+    为什么需要这个：2026-09-15 的运行时故障里，Tenshi 在容器内对**每一个** Claude 通路
+    都得到 `APIConnectionError: Connection error.`（已入库日志 268/268），却从来没有出现过
+    任何 HTTP 状态码错误；而同一镜像里本脚本用 strip 过的值探测却一切正常。
+    `APIConnectionError` 是 anthropic SDK 对**本地构造请求失败**的统一包装——
+    最常见的原因就是 secret 里带了首尾空白/换行/控制字符（从网页粘贴 secret 的经典产物），
+    导致 httpx 直接拒绝构造请求，根本没上网。这里把这种形态显式报出来。
+    """
+    raw = value or ""
+    stripped = raw.strip()
+    return {
+        "length": len(raw),
+        "stripped_length": len(stripped),
+        "has_surrounding_whitespace": raw != stripped,
+        "control_chars": sum(1 for ch in raw if ord(ch) < 32),
+        "non_ascii": sum(1 for ch in raw if ord(ch) > 126),
+    }
+
+
+def shape_note(shape: dict | None) -> str:
+    if not shape or not shape.get("length"):
+        return "—"
+    flags = []
+    if shape.get("has_surrounding_whitespace"):
+        flags.append("❌首尾空白")
+    if shape.get("control_chars"):
+        flags.append(f"❌控制字符×{shape['control_chars']}")
+    if shape.get("non_ascii"):
+        flags.append(f"❌非ASCII×{shape['non_ascii']}")
+    return f"len={shape['length']}" + (" · " + " · ".join(flags) if flags else " · 形态正常")
+
+
+def has_shape_anomaly(shape: dict | None) -> bool:
+    return bool(
+        shape
+        and shape.get("length")
+        and (shape.get("has_surrounding_whitespace") or shape.get("control_chars") or shape.get("non_ascii"))
+    )
+
+
 def os_label() -> str:
     try:
         return f"{os.getenv('RUNNER_OS') or sys.platform} {os.uname().release}"  # type: ignore[attr-defined]
@@ -543,13 +585,16 @@ def classify(endpoint: dict) -> tuple[str, str]:
 def build_endpoints() -> list[dict]:
     endpoints: list[dict] = []
     for tag, base_env, key_envs, note in PROXY_SPECS:
-        base_url = OFFICIAL_BASE_URL if tag == "Official" else (os.getenv(base_env) or "").strip()
+        raw_base = OFFICIAL_BASE_URL if tag == "Official" else (os.getenv(base_env) or "")
+        base_url = raw_base.strip()
         api_key = ""
+        raw_key = ""
         key_source = None
         for env_name in key_envs:
-            value = (os.getenv(env_name) or "").strip()
-            if value:
-                api_key = value
+            value = os.getenv(env_name) or ""
+            if value.strip():
+                api_key = value.strip()
+                raw_key = value
                 key_source = env_name
                 break
         missing = []
@@ -557,6 +602,8 @@ def build_endpoints() -> list[dict]:
             missing.append(base_env)
         if not api_key:
             missing.append(" / ".join(key_envs))
+        key_shape = _secret_shape(raw_key)
+        base_shape = _secret_shape(raw_base) if tag != "Official" else None
         endpoints.append(
             {
                 "tag": tag,
@@ -565,6 +612,9 @@ def build_endpoints() -> list[dict]:
                 "base_url": sanitize_url(base_url),
                 "key_source": key_source,
                 "key_masked": mask(api_key) if api_key else "",
+                "key_shape": key_shape,
+                "base_url_shape": base_shape,
+                "shape_anomaly": has_shape_anomaly(key_shape) or has_shape_anomaly(base_shape),
                 "configured": bool(base_url and api_key),
                 "missing": missing,
                 "dns": None,
@@ -776,6 +826,22 @@ def build_markdown(context: dict, endpoints: list[dict]) -> str:
         lines.append(">")
         for endpoint in failing:
             lines.append(f"> - `{endpoint['tag']}`：{label(endpoint['verdict'])} —— {endpoint['verdict_text']}")
+
+    anomalies = [e for e in endpoints if e.get("shape_anomaly")]
+    if anomalies:
+        lines.append(">")
+        lines.append("> 🧪 **检测到 secret 形态异常**（下列只是长度/空白/控制字符，不是内容）：")
+        for endpoint in anomalies:
+            lines.append(
+                f"> - `{endpoint['tag']}`：key {shape_note(endpoint.get('key_shape'))}"
+                f"；base_url {shape_note(endpoint.get('base_url_shape'))}"
+            )
+        lines.append(">")
+        lines.append(
+            "> 这类值会被 anthropic SDK 在**本地**就拒绝构造请求，表现为"
+            " `APIConnectionError: Connection error.` —— 与网络、代理、key 是否有效都无关；"
+            "重新粘贴一遍 secret（去掉首尾空白/换行）即可。"
+        )
     lines.append("")
 
     lines.append("## 一览")
@@ -867,6 +933,26 @@ def build_markdown(context: dict, endpoints: list[dict]) -> str:
             lines.append("")
             lines.append("  </details>")
         lines.append("")
+
+    lines.append("## 密钥形态体检")
+    lines.append("")
+    lines.append("> 只统计「形态」（长度 / 首尾空白 / 控制字符 / 非 ASCII），**不输出任何密钥内容**。")
+    lines.append("> secret 里带换行或首尾空白时，anthropic SDK 会在本地就构造失败，症状正是")
+    lines.append("> `APIConnectionError: Connection error.`，很容易被误判成网络/代理故障。")
+    lines.append("")
+    lines.append("| 通路 | 来源变量 | key（掩码） | key 形态 | base_url 形态 |")
+    lines.append("|---|---|---|---|---|")
+    for endpoint in endpoints:
+        lines.append(
+            "| `{tag}` | {src} | `{masked}` | {ks} | {bs} |".format(
+                tag=endpoint["tag"],
+                src=endpoint.get("key_source") or "—",
+                masked=endpoint.get("key_masked") or "—",
+                ks=shape_note(endpoint.get("key_shape")),
+                bs=shape_note(endpoint.get("base_url_shape")),
+            )
+        )
+    lines.append("")
 
     lines.append("## 判定口径与建议")
     lines.append("")

@@ -197,6 +197,109 @@ jobs:
           fi
           exit 0
 
+      - name: Reproduce Tenshi's own Claude client call (same image, same SDK, raw secrets)
+        id: reproduce
+        continue-on-error: true
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
+          CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
+          CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+        run: |
+          set -uo pipefail
+          # 这一步的价值：用**和 Tenshi 一模一样的方式**（同一个镜像、同一个 anthropic SDK、
+          # 未做任何 strip 的原始 env 值）真发一次请求，并把 SDK 藏起来的 __cause__ 打出来。
+          # Tenshi 运行时只会看到 `APIConnectionError: Connection error.`，
+          # 而 __cause__ 会直接说明是 DNS、TLS、代理，还是「本地构造请求就被拒」。
+          if ! docker image inspect "$TENSHI_IMAGE" >/dev/null 2>&1; then
+            echo "::warning::镜像不在本地（容器探测步骤可能已跳过），跳过复现"
+            exit 0
+          fi
+
+          docker run --rm -i -u "$(id -u):$(id -g)" \
+            --entrypoint python3 \
+            -e CLAUDE_API_KEY -e CLAUDE_PROXY_BASE_URL \
+            -e CLAUDE_PROXY_KEY_BASE -e CLAUDE_PROXY_KEY_PRIME -e CLAUDE_PROXY_KEY_MAX -e CLAUDE_PROXY_KEY \
+            -e CLAUDE_PROXY_BASE_URL_2 -e CLAUDE_PROXY_KEY_2 \
+            "$TENSHI_IMAGE" - <<'PY'
+          import os
+          import anthropic
+
+          KEYS = [
+              "CLAUDE_API_KEY",
+              "CLAUDE_PROXY_KEY_BASE",
+              "CLAUDE_PROXY_KEY_PRIME",
+              "CLAUDE_PROXY_KEY_MAX",
+              "CLAUDE_PROXY_KEY",
+              "CLAUDE_PROXY_KEY_2",
+          ]
+          SECRETS = [os.getenv(k) or "" for k in KEYS]
+
+          def redact(text: str) -> str:
+              out = str(text)
+              for s in SECRETS:
+                  if s:
+                      out = out.replace(s, "<redacted>")
+              return out
+
+          def shape(value: str) -> str:
+              stripped = value.strip()
+              return (
+                  f"len={len(value)} 尾随空白={value != value.rstrip()} 前导空白={value != value.lstrip()}"
+                  f" 控制字符={sum(1 for c in value if ord(c) < 32)} 非ASCII={sum(1 for c in value if ord(c) > 126)}"
+              )
+
+          TARGETS = [
+              ("Proxy 1 Base", "CLAUDE_PROXY_BASE_URL", ("CLAUDE_PROXY_KEY_BASE", "CLAUDE_PROXY_KEY")),
+              ("Proxy 1 Prime", "CLAUDE_PROXY_BASE_URL", ("CLAUDE_PROXY_KEY_PRIME",)),
+              ("Proxy 1 Max", "CLAUDE_PROXY_BASE_URL", ("CLAUDE_PROXY_KEY_MAX",)),
+              ("Proxy 2", "CLAUDE_PROXY_BASE_URL_2", ("CLAUDE_PROXY_KEY_2",)),
+              ("Official", "", ("CLAUDE_API_KEY",)),
+          ]
+
+          print(f"anthropic SDK 版本：{getattr(anthropic, '__version__', '?')}")
+          print("（下面只打印形态统计与 SDK 异常链，密钥内容已擦除）")
+          for name, base_env, key_envs in TARGETS:
+              base_raw = "https://api.anthropic.com" if not base_env else (os.getenv(base_env) or "")
+              key_raw = ""
+              key_from = None
+              for env_name in key_envs:
+                  value = os.getenv(env_name) or ""
+                  if value.strip():
+                      key_raw = value
+                      key_from = env_name
+                      break
+              print(f"\n--- {name}（key 来自 {key_from or '未配置'}）")
+              print(f"    base_url 形态：{shape(base_raw) if base_env else '（SDK 默认端点）'}")
+              print(f"    key 形态     ：{shape(key_raw) if key_raw else '（未配置）'}")
+              if not key_raw:
+                  print("    → 未配置，跳过")
+                  continue
+              try:
+                  client = anthropic.Anthropic(
+                      api_key=key_raw,               # 有意不 strip：与 Tenshi 完全一致
+                      base_url=base_raw or None,
+                      max_retries=0,
+                      timeout=15.0,
+                  )
+                  client.messages.create(
+                      model="claude-haiku-4-5", max_tokens=1, messages=[{"role": "user", "content": "ping"}]
+                  )
+                  print("    → 调用成功（该通路的 secret 形态与网络都没问题）")
+              except Exception as exc:  # noqa: BLE001
+                  print(f"    → {type(exc).__name__}: {redact(str(exc))[:200]}")
+                  cause = exc.__cause__
+                  depth = 0
+                  while cause is not None and depth < 3:
+                      print(f"      cause[{depth}]: {type(cause).__name__}: {redact(str(cause))[:240]}")
+                      cause = cause.__cause__
+                      depth += 1
+          PY
+
       - name: Compare host vs container
         if: always()
         run: |
