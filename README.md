@@ -345,6 +345,9 @@ Calling/
 │   ├── uploads/          # 上传文件存放目录
 │   ├── conversations.json
 │   └── rag.sqlite3       # RAG 向量数据库
+├── scripts/
+│   └── claude_proxy_reachability.py  # Claude 代理可达性探测（GitHub Actions 用）
+├── reports/              # 探测报告（由工作流自动生成/提交）
 ├── .env.example
 └── requirements.txt
 ```
@@ -366,5 +369,25 @@ Calling/
 | POST | `/api/translate` | 翻译文件（同步，等待全部完成） |
 | POST | `/api/translate/stream` | 翻译文件（SSE 流式，逐块返回） |
 | POST | `/api/translate/abort/{job_id}` | 中止流式翻译任务 |
+
+---
+
+## Claude 代理可达性检测（GitHub Actions）
+
+线上「Claude 一路降级」时，很难判断是 **GitHub runner 出网到不了代理**、
+**代理证书/域名变了**，还是 **key 被禁用/额度用尽**。`.github/workflows/claude_proxy_reachability.yml`
+每 6 小时（也可手动 Run workflow）从 GitHub 服务器侧对每一档通路做分层探测：
+
+DNS → TCP → TLS（含证书到期）→ `GET /v1/models` 与 `POST /v1/messages`（`max_tokens=1`）
+→ runner 公网出口 IP（代理方要加白名单时用的就是它）；`Official` 官方通路作为对照组。
+
+- 脚本：`scripts/claude_proxy_reachability.py`（只用标准库，不依赖 Tenshi 代码）
+- 环境变量：与 Tenshi 同名（`CLAUDE_API_KEY` / `CLAUDE_PROXY_BASE_URL` /
+  `CLAUDE_PROXY_KEY_BASE|PRIME|MAX` / `CLAUDE_PROXY_BASE_URL_2` / `CLAUDE_PROXY_KEY_2`），
+  不需要额外配置 secret
+- 产出：`reports/claude-proxy-reachability/`（`latest.md` 报告 / `latest.json` 原始数据 /
+  `latest.log` 完整日志 / `history.jsonl` 趋势），同时进 run 页面的 Step Summary 与 artifact，
+  并由工作流自己提交回本仓库（提交信息带 `[skip ci]`）
+- 默认「有已配置通路不可用就让本次运行失败」，等于一个免费的告警；手动运行时可关掉
 
 <p align="center"><sub>Copyright © 2026 緋想天子 (Hisou-Tenshi) · 最后更新 2026-09</sub></p>

@@ -1,0 +1,235 @@
+# =============================================================================
+#  Claude 代理可达性检测（Claude Proxy Reachability）—— 独立诊断工作流
+# =============================================================================
+#
+#  这个 workflow 回答一个线上很难查的问题：**从 GitHub 托管 runner 出发，
+#  Claude 的每一档通路到底能不能用？**
+#
+#  背景：
+#    Tenshi / Elaina 的回复链跑在本仓库的 Actions 里，Claude 走「代理1 三档
+#    key（Base/Prime/Max）→ 代理2 → 官方」。代理不可用时，线上表现只是
+#    「Claude 一路降级」，看不出到底是
+#      · GitHub runner 的出网被墙/被限流（本地却完全正常），
+#      · 代理证书/域名变了，
+#      · key 被禁用、额度耗尽或被 WAF 拦，
+#      · 还是单纯上游 5xx。
+#    本工作流把这几层拆开分别探测，产出可读报告，任何一步失败都能一眼定位。
+#
+#  隔离性（重要）：
+#    · 只 checkout 本仓库（Hisou-Tenshi/Calling），**不引用、不 checkout、
+#      不 dispatch Tenshi 任何东西**，也不使用跨仓库 token；
+#    · 探测脚本 `scripts/claude_proxy_reachability.py` 只用 Python 标准库，
+#      不 import 任何 Tenshi 代码；
+#    · 因为 Calling 代跑 Tenshi 的工作流，两边环境变量名完全一致，所以这里
+#      直接复用同一套 secrets（CLAUDE_* / CLAUDE_PROXY_*），不需要新配置。
+#
+#  每一档探测 5 层：DNS → TCP → TLS（含证书到期）→ HTTP（/v1/models 与
+#  /v1/messages，max_tokens=1）→ runner 公网出口 IP（代理方要求加白名单时用它）。
+#  `Official`（Anthropic 官方）作为对照组：官方也挂说明是 runner 出网问题，
+#  只有代理挂说明是代理侧问题。
+#
+#  产出（都留在本仓库内）：
+#    · reports/claude-proxy-reachability/latest.md   —— 人读报告（同时进 Step Summary）
+#    · reports/claude-proxy-reachability/latest.json —— 机读原始数据
+#    · reports/claude-proxy-reachability/latest.log  —— 本次运行完整日志
+#    · reports/claude-proxy-reachability/history.jsonl —— 每次一行摘要（保留最近 500 条）
+#    · Actions artifact（保留 90 天）
+#  报告由本 workflow 自己提交回本仓库（提交信息带 [skip ci]，避免连锁触发）。
+#
+#  失败语义：默认「只要有已配置通路不可用就让本次运行失败」（Actions 会给仓库
+#  所有者发通知，等于一个免费的告警）；可用 workflow_dispatch 的
+#  fail_on_unreachable=false 临时关掉。若一个通路都没配置（secrets 缺失），
+#  只发 warning 不算失败。
+#
+#  手动运行：Actions → Claude Proxy Reachability → Run workflow，
+#  可指定候选模型 / 探测次数 / 是否真的发 messages（关掉 = 零 token 消耗）。
+# =============================================================================
+
+name: Claude Proxy Reachability
+
+on:
+  schedule:
+    # 每 6 小时一次（23 分这个非整点分钟避开调度高峰）：01:23 / 07:23 / 13:23 / 19:23 UTC
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      models:
+        description: "messages 探测的候选模型（逗号分隔，依次尝试）"
+        required: false
+        default: "claude-opus-4-6,claude-sonnet-4-6,claude-3-5-sonnet-20241022"
+      attempts:
+        description: "每个通路的 messages 探测次数"
+        required: false
+        default: "3"
+      probe_messages:
+        description: "是否真的调用 /v1/messages（false = 只探网络与 /v1/models，零 token 消耗）"
+        type: boolean
+        default: true
+      fail_on_unreachable:
+        description: "存在不可用通路时让本次运行失败"
+        type: boolean
+        default: true
+      commit_report:
+        description: "把报告提交回本仓库"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: claude-proxy-reachability
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout (本仓库，不涉及 Tenshi)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REACHABILITY_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Run reachability probe
+        id: probe
+        continue-on-error: true
+        env:
+          # 与 Tenshi 完全同名的一套环境变量（Calling 代跑 Tenshi 工作流）
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
+          CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
+          CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
+          CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
+          CLAUDE_PROXY_KEY: ${{ secrets.CLAUDE_PROXY_KEY }}
+          CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
+          CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          PROBE_MODELS: ${{ github.event.inputs.models || 'claude-opus-4-6,claude-sonnet-4-6,claude-3-5-sonnet-20241022' }}
+          PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '3' }}
+          PROBE_MESSAGES: ${{ github.event.inputs.probe_messages || 'true' }}
+          FAIL_ON_UNREACHABLE: ${{ github.event.inputs.fail_on_unreachable || 'true' }}
+        run: |
+          set -uo pipefail
+          ARGS=(--models "$PROBE_MODELS" --attempts "$PROBE_ATTEMPTS")
+          if [ "$PROBE_MESSAGES" != "true" ]; then
+            ARGS+=(--no-messages)
+          fi
+          if [ "$FAIL_ON_UNREACHABLE" = "true" ]; then
+            ARGS+=(--fail-on-unreachable)
+          fi
+
+          echo "探测参数：${ARGS[*]}"
+          python3 scripts/claude_proxy_reachability.py "${ARGS[@]}"
+          code=$?
+          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
+          # 退出码留到最后一步统一判定：这里先保证报告/日志一定产出
+          exit 0
+
+      - name: Publish report to Step Summary
+        if: always()
+        run: |
+          set -uo pipefail
+          DIR=reports/claude-proxy-reachability
+          {
+            echo ""
+            echo "---"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+          if [ -f "$DIR/latest.md" ]; then
+            cat "$DIR/latest.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "> ❌ 报告未生成（探测脚本异常退出），请查看本步骤之前的日志。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -f "$DIR/latest.log" ]; then
+            {
+              echo ""
+              echo "<details><summary>完整日志（latest.log 尾部 120 行）</summary>"
+              echo ""
+              echo '```text'
+              tail -n 120 "$DIR/latest.log"
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-proxy-reachability-${{ github.run_id }}
+          path: reports/claude-proxy-reachability/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Commit report (best-effort)
+        if: always() && (github.event_name == 'schedule' || github.event.inputs.commit_report != 'false')
+        run: |
+          set -uo pipefail
+          git config user.name "緋想天子"
+          git config user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
+
+          DIR=reports/claude-proxy-reachability
+          if [ ! -d "$DIR" ]; then
+            echo "本次没有产出报告目录（探测脚本未写出文件），跳过提交"
+            exit 0
+          fi
+
+          git add -A "$DIR"
+          if git diff --cached --quiet; then
+            echo "报告无变化，跳过提交"
+            exit 0
+          fi
+
+          STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          VERDICTS="$(python3 - <<'PY'
+          import json, pathlib
+          path = pathlib.Path("reports/claude-proxy-reachability/latest.json")
+          try:
+              data = json.loads(path.read_text(encoding="utf-8"))
+              items = [
+                  f"{k}={v}"
+                  for k, v in (data.get("verdicts") or {}).items()
+                  if v != "not_configured"
+              ]
+              print(" ".join(items) or "无通路")
+          except Exception:
+              print("结果不可读")
+          PY
+          )"
+
+          git commit -m "Claude 代理可达性检测：${STAMP}（${VERDICTS}） [skip ci]"
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "报告已推送（第 ${attempt} 次尝试）"
+              exit 0
+            fi
+            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+            sleep $((attempt * 5))
+          done
+
+          # 报告推送失败不该掩盖探测结论本身，只报 warning
+          echo "::warning::报告连续 3 次推送失败（检查 Actions 写权限或 REACHABILITY_TOKEN）"
+
+      - name: Verdict
+        if: always()
+        env:
+          PROBE_EXIT: ${{ steps.probe.outputs.exit_code }}
+        run: |
+          set -uo pipefail
+          code="${PROBE_EXIT:-}"
+          echo "探测脚本退出码：${code:-<空>}"
+
+          case "$code" in
+            0) echo "✅ 已配置的 Claude 通路全部可用。" ;;
+            1) echo "::error::存在不可用的 Claude 通路 —— 详见 Step Summary / 报告（关键结论：看 DNS/TCP/TLS 是否全绿，再看 401/429/5xx）" ; exit 1 ;;
+            2) echo "::warning::没有任何 Claude 通路被配置（secrets 缺失），本次未做检测。" ;;
+            *) echo "::error::探测脚本异常退出（code=${code:-未知}），请查看日志。" ; exit 1 ;;
+          esac
