@@ -25,8 +25,15 @@
 #    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
 #
+#  两档频率（真实调用模型很贵也很吃额度，所以拆开）：
+#    · 每 6 小时（JST 02/08/14/20）→ `--mode quick`：DNS → TCP → TLS → GET /models 鉴权，
+#      **不调用模型**；quick 会沿用上一次 full 的真实调用结论（带它自己的时间戳），
+#      所以周级判红的通路在两次 full 之间依然保持被 ban。
+#    · 每周一次（JST 周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
+#      （max_tokens 极小），由它决定「模型层面能不能用」。
+#
 #  产出（都提交回 Tenshi 仓库）：
-#    · data/provider_health.json         —— 机读结果（运行时 gate 读它）
+#    · data/provider_health.json         —— 机读结果（运行时 gate 读它；含三层检查各自的时间戳）
 #    · reports/provider_health/latest.md —— 人读报告（同时也进 Step Summary / artifact）
 #
 #  失败语义：探活脚本自身异常才让 run 变红；某条通路是红**不算**失败（那是被探出来的
@@ -39,16 +46,25 @@ name: Provider Health Probe (Tenshi)
 
 on:
   schedule:
-    # JST 02:00（UTC 17:00，前一日）
-    - cron: "0 17 * * *"
+    # 每 6 小时（JST 02:00 / 08:00 / 14:00 / 20:00）：**只跑到「列模型」为止**
+    # —— DNS → TCP → TLS → GET /models（鉴权），不调用模型、不产生生成计费。
+    - cron: "0 17,23,5,11 * * *"
+    # 每周一次**真实调用**（JST 周日 02:30 = 周六 17:30 UTC）：
+    # 在上面三层之后，再对每条通路真的发一次 max_tokens 极小的请求。
+    - cron: "30 17 * * 6"
   workflow_dispatch:
     inputs:
+      mode:
+        description: "探测深度"
+        type: choice
+        options: ["full", "quick"]
+        default: "full"
       providers:
         description: "要探测的类别（逗号分隔）"
         required: false
         default: "claude,gemini,deepseek,gpt,openrouter,grok"
       attempts:
-        description: "每条通路的真实调用次数"
+        description: "每条通路的真实调用次数（仅 full）"
         required: false
         default: "1"
       commit_result:
@@ -104,9 +120,25 @@ jobs:
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,openrouter,grok' }}
           PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
+          DISPATCH_MODE: ${{ github.event.inputs.mode || '' }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -uo pipefail
+          # 真实调用模型很贵、也很吃额度，所以拆成两档：
+          #   每 6 小时 → quick（DNS/TCP/TLS + 列模型鉴权，不调用模型）
+          #   每周一次 → full（再加一次真实调用，结论由 quick 沿用）
+          MODE="$DISPATCH_MODE"
+          if [ -z "$MODE" ]; then
+            if [ "$SCHEDULE_CRON" = "30 17 * * 6" ]; then
+              MODE="full"
+            else
+              MODE="quick"
+            fi
+          fi
+          echo "探测模式：${MODE}（触发：${SCHEDULE_CRON:-手动}）"
+
           python -u tenshi/scripts/probe_provider_paths.py \
+            --mode "$MODE" \
             --providers "$PROBE_PROVIDERS" \
             --attempts "$PROBE_ATTEMPTS" \
             --json tenshi/data/provider_health.json \
@@ -166,7 +198,8 @@ jobs:
                   paths = entry.get("paths") or {}
                   good = sum(1 for p in paths.values() if p.get("ok"))
                   parts.append(f"{provider}:{'绿' if entry.get('enabled') else '红'}{good}/{len(paths)}")
-              print(" ".join(parts) or "无结果")
+              mode = data.get("mode") or "?"
+              print(f"[{mode}] " + (" ".join(parts) or "无结果"))
           except Exception:
               print("结果不可读")
           PY
