@@ -46,6 +46,8 @@ jobs:
             data/summary_cursor.json
             data/knowledge_base.json
             data/perception_schedule.json
+            # 每日探活结果：感知层里也可能补跑回复引擎，同样要能读到 provider health
+            data/provider_health.json
             data/image_analysis_cache.json
             data/embedding_cache.pkl
             data/tenshi_memory.db

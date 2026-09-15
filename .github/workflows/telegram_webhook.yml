@@ -48,6 +48,8 @@ jobs:
             data/summary_cursor.json
             data/knowledge_base.json
             data/perception_schedule.json
+            # 每日探活结果：runtime 的 provider_health gate 读它决定哪些通路照常调用 / ban 掉
+            data/provider_health.json
             data/image_analysis_cache.json
             data/embedding_cache.pkl
             data/tenshi_memory.db
