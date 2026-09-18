@@ -172,26 +172,12 @@ jobs:
         working-directory: tenshi
         run: |
           set -uo pipefail
-          # 容器任务里必须先认下这个仓库，否则 git 会以「不在 git 目录 / dubious ownership」拒绝
-          git config --global --add safe.directory "*"
-          # 用 --global 写身份：即使 cwd 不是仓库也不会因为「not in a git directory」直接炸
-          git config --global user.name "緋想天子"
-          git config --global user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
-
           if [ ! -d .git ]; then
             echo "::warning::tenshi/ 下没有 .git（checkout 未生效？），跳过回写；结果仍在 artifact 里"
             exit 0
           fi
 
-          # `--sparse` 是关键：即使白名单外也照加，宁可多加一个文件也不静默丢结果
-          git add --sparse -A data/provider_health.json reports/provider_health 2>/dev/null \
-            || git add -A data/provider_health.json reports/provider_health 2>/dev/null || true
-          if git diff --cached --quiet; then
-            echo "探活结果无变化，跳过提交"
-            exit 0
-          fi
-
-          SUMMARY="$(python3 - <<'PY'
+          SUMMARY="$(python - <<'PY'
           import json, pathlib
           try:
               data = json.loads(pathlib.Path("data/provider_health.json").read_text(encoding="utf-8"))
@@ -207,15 +193,13 @@ jobs:
           PY
           )"
 
-          git commit -m "Provider 探活：$(date -u '+%Y-%m-%d %H:%M UTC')（${SUMMARY}） [skip ci]"
-
-          for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              echo "探活结果已推送回 Tenshi（第 ${attempt} 次尝试）"
-              exit 0
-            fi
-            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
-            sleep $((attempt * 5))
-          done
-          echo "::warning::探活结果连续 3 次推送失败（检查 TENSHI_BOT_ACTION_TOKEN 的写权限）"
+          # 探活结果属于可重建的辅助数据，但它是下一轮回复的 gate 输入，所以还是
+          # 走 perceive 档（5 次重试 + 无损合并），不用旧的 3 次 push/pull 模板。
+          python -u scripts/tenshi_git_sync.py \
+            --repo . \
+            --git-name "緋想天子" \
+            --git-email "97383295+Hisou-Tenshi@users.noreply.github.com" \
+            push \
+            --tier perceive \
+            --message "Provider 探活：$(date -u '+%Y-%m-%d %H:%M UTC')（${SUMMARY}） [skip ci]" \
+            --files data/provider_health.json reports/provider_health
