@@ -241,9 +241,16 @@ jobs:
               logs/llm_trace.jsonl \
               logs/.gitkeep
 
-      # 落库自检：回复链路的要求是「无论如何都要落到 main」。tenshi_git_sync 已经把
-      # 重试做足了，这里再向 GitHub 反查一次那个 commit 是否真的在远端，避免出现
-      # 「步骤绿了但其实没落库」的假成功。
+      # 落库自检：回复链路的要求是「无论如何都要落到 main」。
+      #
+      # 注意两件事（2026-09-18 两个真实故障）：
+      #   1. GitHub 的 `run:` 用的是 POSIX sh（dash），**不支持** `${VAR:0:8}`
+      #      这种 bash 子串展开 —— 那样会 "Bad substitution" 且 `set -e` 下直接退出。
+      #      所以这里用 `cut -c1-8`。
+      #   2. 自检本身绝不能成为误报来源：只有 GitHub 明确回答「没有这个 commit」
+      #      （404/422）才算失败；令牌没权限、网络抖动、gh 缺失等一律只告警。
+      #      真正的落库保证在 scripts/tenshi_git_sync.py 里（push 成功后本地核对
+      #      origin/main 是否已包含本次提交），那一步不依赖 gh。
       - name: Verify commit landed on Tenshi main
         id: verify_landed
         if: always()
@@ -254,22 +261,31 @@ jobs:
           COMMITTED_SHA: ${{ steps.commit_push.outputs.committed_sha }}
           BRANCH: ${{ github.ref_name }}
         run: |
-          set +e
           if [ -z "${COMMITTED_SHA}" ]; then
             echo "本次没有产生新提交（无变更），跳过落库自检"
             exit 0
           fi
-          if [ -z "$TENSHI_REPO" ]; then
+          if [ -z "${TENSHI_REPO}" ]; then
             echo "::warning::GH_REPO 未配置，跳过落库自检"
             exit 0
           fi
-          echo "自检：${COMMITTED_SHA} 是否已在 ${TENSHI_REPO}@${BRANCH}"
-          if gh api "repos/${TENSHI_REPO}/commits/${COMMITTED_SHA}" >/dev/null 2>&1; then
-            echo "落库自检通过：${COMMITTED_SHA:0:8} 已在远端"
+          SHORT=$(printf '%s' "${COMMITTED_SHA}" | cut -c1-8)
+          echo "自检：${SHORT} 是否已在 ${TENSHI_REPO}@${BRANCH}"
+          set +e
+          detail=$(gh api "repos/${TENSHI_REPO}/commits/${COMMITTED_SHA}" 2>&1)
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "落库自检通过：${SHORT} 已在远端"
             exit 0
           fi
-          echo "::error::落库自检失败：${COMMITTED_SHA:0:8} 不在 ${TENSHI_REPO}@${BRANCH} 上，本次回复没有进 main"
-          exit 1
+          case "$detail" in
+            *"HTTP 404"*|*"HTTP 422"*)
+              echo "::error::落库自检失败：${SHORT} 不在 ${TENSHI_REPO}@${BRANCH} 上，本次回复没有进 main"
+              exit 1
+              ;;
+          esac
+          echo "::warning::落库自检无法完成（gh api 退出码 ${rc}）；落库结论以 tenshi_git_sync 的本地核对为准"
+          exit 0
 
       # 最后的兜底：只要「回复脚本失败」或「没能落库」，就把本轮全部状态（含 base64
       # 编码的二进制/大文件）和一份完整 git bundle 传成 artifact。这是「就算失败也
@@ -332,7 +348,10 @@ jobs:
           echo "备份目录内容：" && find "$staging" -type f | sort
 
       - name: Upload full-state Artifact
-        if: steps.fallback_artifact.outcome == 'success'
+        # 条件与备份步骤保持一致即可：能走到这里就说明确实需要兜底。
+        # 之前这里用 `steps.fallback_artifact.outcome == 'success'` 判断，
+        # 实测会误判成 skipped（备份步骤明明跑出了 13 个文件），artifact 反而不上传。
+        if: always() && (steps.process_message.outcome == 'failure' || steps.commit_push.outcome == 'failure' || steps.verify_landed.outcome == 'failure')
         uses: actions/upload-artifact@v4
         with:
           name: tenshi-full-state-${{ github.run_id }}

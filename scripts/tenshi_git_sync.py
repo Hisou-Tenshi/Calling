@@ -126,6 +126,19 @@ class Repo:
 
     path: Path
     committed_sha: str = ""
+    pushed_sha: str = ""
+
+    def head(self) -> str:
+        return self.out("rev-parse", "HEAD")
+
+    def refresh_head(self) -> str:
+        """把 pushed_sha 对齐到「现在真正要推的那个提交」。
+
+        rebase 会**重写**提交，SHA 随之变化，所以不能沿用 commit 当时的那个值 ——
+        否则 push 之后核对必然失败（这是 2026-09-18 加核对时踩到的坑）。
+        """
+        self.pushed_sha = self.head()
+        return self.pushed_sha
 
     def git(
         self,
@@ -615,6 +628,31 @@ def write_github_output(**values: str) -> None:
         warn(f"写 GITHUB_OUTPUT 失败：{exc}")
 
 
+def verify_landed(repo: Repo, branch: str, sha: str) -> bool:
+    """push 之后本地核对：远端分支是否真的已经包含这次提交。
+
+    这是「落库保证」的真正落点 —— 只依赖 git 自己（push 之后的一次浅 fetch），
+    不依赖 gh、不依赖令牌额外权限、也不怕 GitHub API 抖动。
+    """
+    if not sha:
+        return True
+    try:
+        repo.git("fetch", "origin", branch)
+        remote_rev = repo.out("rev-parse", f"refs/remotes/origin/{branch}")
+    except SyncError as exc:
+        warn(f"落库核对无法完成（fetch 失败），以 push 返回值作为结论：{exc}")
+        return True
+    if remote_rev == sha:
+        log(f"落库核对通过：{branch} 就在本次提交 {sha[:8]}")
+        return True
+    if repo.git("merge-base", "--is-ancestor", sha, remote_rev, check=False).returncode == 0:
+        log(f"落库核对通过：{sha[:8]} 已在 {branch}（{remote_rev[:8]}）的历史里")
+        return True
+    # 一般是被别人抢先推进了，这一轮不算成功；交给上层重试。
+    warn(f"落库核对未通过：{sha[:8]} 不在 {branch}（{remote_rev[:8]}）的历史里")
+    return False
+
+
 def push_direct(
     repo: Repo,
     branch: str,
@@ -632,12 +670,17 @@ def push_direct(
 
     last_error = ""
     for attempt in range(1, attempts + 1):
+        # 每轮都重新对齐：上一轮的 rebase 可能重写过提交
+        repo.refresh_head()
         push = repo.git("push", "origin", f"HEAD:refs/heads/{branch}", check=False)
         if push.returncode == 0:
             log(f"已推送到 {branch}（第 {attempt}/{attempts} 次尝试）")
-            return True
-        last_error = (push.stderr or push.stdout or "").strip()
-        log(f"推送被拒（第 {attempt}/{attempts} 次）：{last_error.splitlines()[-1] if last_error else '未知原因'}")
+            if verify_landed(repo, branch, repo.pushed_sha):
+                return True
+            last_error = "push 返回成功，但远端历史里没有这次提交"
+        else:
+            last_error = (push.stderr or push.stdout or "").strip()
+            log(f"推送被拒（第 {attempt}/{attempts} 次）：{last_error.splitlines()[-1] if last_error else '未知原因'}")
 
         if attempt == attempts:
             break
@@ -670,8 +713,20 @@ def push_branch(
         push = repo.git("push", "origin", f"HEAD:refs/heads/{target}", check=False)
         if push.returncode == 0:
             log(f"已推送到独立分支 {target}（等 merge-staging 汇流到 {DEFAULT_BRANCH}）")
-            return True
-        last_error = (push.stderr or push.stdout or "").strip()
+            # 同样做一次本地核对：这个分支只有我们推，核对不过多半是网络/权限问题
+            try:
+                head = repo.out("rev-parse", "HEAD")
+                remote = repo.git("ls-remote", "--heads", "origin", target, check=False)
+                remote_sha = (remote.stdout or "").split()[0] if (remote.stdout or "").strip() else ""
+            except (SyncError, IndexError):
+                remote_sha, head = "", ""
+            if head and remote_sha and head != remote_sha:
+                last_error = f"分支 {target} 推送后核对不一致：local={head[:8]} remote={remote_sha[:8]}"
+                warn(last_error)
+            else:
+                return True
+        else:
+            last_error = (push.stderr or push.stdout or "").strip()
         delay = base_delay * attempt
         log(f"分支推送失败（第 {attempt}/{attempts} 次），{delay:.0f}s 后重试")
         time.sleep(delay)
