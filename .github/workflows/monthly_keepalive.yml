@@ -96,26 +96,16 @@ jobs:
       - name: Commit and push
         run: |
           set -euo pipefail
-          git config user.name "緋想天子"
-          git config user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
-
+          # 边缘工具流程：README 版权页脚，走 edge 档推独立 bot-staging 分支
+          # （由 Tenshi 的 merge_staging 汇流），不再和回复/总结链路抢 main。
+          # 原来的 `git pull --rebase --autostash` 在无 upstream 的检出下会直接失败。
           if git diff --quiet -- README.md; then
             echo "README 无变化，跳过提交"
             exit 0
           fi
-
-          git add README.md
-          git commit -m "月度保活：更新 README 版权页脚 [skip ci]"
-
-          for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              echo "推送成功（第 ${attempt} 次尝试）"
-              exit 0
-            fi
-            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-            sleep $((attempt * 5))
-          done
-
-          echo "连续 3 次推送失败，本次保活放弃" >&2
-          exit 1
+          python -u scripts/tenshi_git_sync.py \
+            --repo . \
+            push \
+            --tier edge \
+            --message "月度保活：更新 README 版权页脚 [skip ci]" \
+            --files README.md

@@ -479,23 +479,16 @@ jobs:
         if: always() && (github.event_name == 'schedule' || github.event.inputs.commit_report != 'false')
         run: |
           set -uo pipefail
-          git config user.name "緋想天子"
-          git config user.email "97383295+Hisou-Tenshi@users.noreply.github.com"
-
+          # 边缘工具流程：报告走 edge 档，推独立的 bot-staging 分支再汇流，
+          # 不占 main、也不再用会在无 upstream 检出处直接失败的 `git pull --rebase`。
           DIR="$REPORT_DIR"
           if [ ! -d "$DIR" ]; then
             echo "本次没有产出报告目录（探测脚本未写出文件），跳过提交"
             exit 0
           fi
 
-          git add -A "$DIR"
-          if git diff --cached --quiet; then
-            echo "报告无变化，跳过提交"
-            exit 0
-          fi
-
           STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          VERDICTS="$(python3 - <<'PY'
+          VERDICTS="$(python - <<'PY'
           import json, os, pathlib
           base = pathlib.Path(os.environ.get("REPORT_DIR", "reports/claude-proxy-reachability"))
           parts = []
@@ -516,20 +509,15 @@ jobs:
           PY
           )"
 
-          git commit -m "Claude 代理可达性检测：${STAMP}（${VERDICTS}） [skip ci]"
-
-          for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              echo "报告已推送（第 ${attempt} 次尝试）"
-              exit 0
-            fi
-            echo "推送失败，先 rebase 到远端最新再重试（第 ${attempt} 次）"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
-            sleep $((attempt * 5))
-          done
-
-          # 报告推送失败不该掩盖探测结论本身，只报 warning
-          echo "::warning::报告连续 3 次推送失败（检查 Actions 写权限或 REACHABILITY_TOKEN）"
+          # 报告推送失败不该掩盖探测结论本身：这里失败只记 warning。
+          if ! python -u scripts/tenshi_git_sync.py \
+              --repo . \
+              push \
+              --tier edge \
+              --message "Claude 代理可达性检测：${STAMP}（${VERDICTS}） [skip ci]" \
+              --files "$DIR"; then
+            echo "::warning::报告推送失败（检查 Actions 写权限或 REACHABILITY_TOKEN）"
+          fi
 
       - name: Verdict
         if: always()

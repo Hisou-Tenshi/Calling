@@ -86,54 +86,23 @@ jobs:
         if: always() && (steps.update_script.outcome == 'failure' || steps.update_script.outputs.updated == 'true')
         working-directory: tenshi
         run: |
-          git config --global --add safe.directory "*"
-          git config --global user.name "比那名居 天子"
-          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
-
+          # 长期记忆总结：同样必须落到 main——下一次总结要读到推进后的游标，
+          # 落不了库就会重复总结或漏总结。走 summary 档（6 次重试 + 无损合并）。
           mkdir -p data logs
-
-          # 仅提交总结/记忆产物；不触碰 tenshi_log、回复侧 debug/llm_trace、downloads
-          git add \
-            data/knowledge_base.json \
-            data/knowledge_base_events/ \
-            data/knowledge_base_shared_experience/ \
-            data/summary_cursor.json \
-            data/tenshi_memory.db \
-            data/embedding_cache.pkl \
-            logs/summary_update.log \
-            logs/summary_llm_trace.jsonl \
-            >/dev/null 2>&1 || true
-
-          if git commit -m "天子例行巡狩：记忆更新 [skip ci]" >/dev/null 2>&1; then
-            # ── 防冲突推送：最多重试 3 次 ────────────────────────────────────
-            for attempt in 1 2 3; do
-              if git push origin main >/dev/null 2>&1; then
-                exit 0
-              fi
-
-              git fetch origin main >/dev/null 2>&1
-
-              if ! git rebase origin/main >/dev/null 2>&1; then
-                if [ -n "$(git ls-files -u)" ]; then
-                  # 只对确实存在且有冲突的文件执行 checkout --ours
-                  # 先列出冲突路径，再逐一判断是否存在，避免 pathspec 错误
-                  git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
-                    if [ -e "$cf" ]; then
-                      git checkout --ours -- "$cf" >/dev/null 2>&1 || true
-                      git add -- "$cf" >/dev/null 2>&1 || true
-                    fi
-                  done
-                  git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
-                else
-                  git rebase --abort >/dev/null 2>&1 || true
-                fi
-              fi
-            done
-
-            git push origin main >/dev/null 2>&1
-          else
-            echo "No changes to commit, skipping push."
-          fi
+          python -u scripts/tenshi_git_sync.py \
+            --repo . \
+            push \
+            --tier summary \
+            --message "天子例行巡狩：记忆更新 [skip ci]" \
+            --files \
+              data/knowledge_base.json \
+              data/knowledge_base_events/ \
+              data/knowledge_base_shared_experience/ \
+              data/summary_cursor.json \
+              data/tenshi_memory.db \
+              data/embedding_cache.pkl \
+              logs/summary_update.log \
+              logs/summary_llm_trace.jsonl
 
       - name: Build Release Package
         if: steps.update_script.outputs.updated == 'true'
@@ -214,15 +183,22 @@ jobs:
         id: push_failure_bundle
         working-directory: tenshi
         run: |
+          # 走 tenshi_git_sync（`git add --sparse` + 真实重试）：原来的
+          # `git add secure_failures/...` 会被 sparse-checkout 拒绝、再被 || true 吞掉，
+          # 结果是「报告已推送、仓库里啥也没有」。
           set +e
           enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
           mkdir -p secure_failures
           cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
-          git add "secure_failures/${enc_file}" >/dev/null 2>&1 || true
-          git commit -m "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1 || true
-          if git push origin main >/dev/null 2>&1; then
+          if python -u scripts/tenshi_git_sync.py \
+              --repo . \
+              push \
+              --tier reply \
+              --message "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" \
+              --files "secure_failures/${enc_file}"; then
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           else
+            echo "::warning::加密失败包没能推回 Tenshi"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
           fi
 

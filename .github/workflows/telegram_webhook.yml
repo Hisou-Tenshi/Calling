@@ -42,12 +42,16 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             src/
+            scripts/
+            .gitattributes
             Tenshi.json
             data/tenshi_log.json
             data/context_compressions.json
             data/summary_cursor.json
             data/knowledge_base.json
             data/perception_schedule.json
+            # 感知层「上次沉默时刻」状态：回复链路也会读它做冷却判断
+            data/perception_state.json
             # 每日探活结果：runtime 的 provider_health gate 读它决定哪些通路照常调用 / ban 掉
             data/provider_health.json
             data/image_analysis_cache.json
@@ -59,6 +63,11 @@ jobs:
             logs/debug.log
             logs/llm_trace.jsonl
             logs/.gitkeep
+            # 加密失败包必须能入库：2026-09-18 排查发现 `git add secure_failures/...`
+            # 因为不在白名单里被 git 拒绝、又被 `|| true` 吞掉，导致「已推送」是假的
+            # （secure_failures/ 里最后一个包停在 2026-05-19）。这里补上白名单，
+            # 并且 push 时统一走 `git add --sparse`。
+            secure_failures/
 
       - name: "Guard: wait if perception is running"
         env:
@@ -203,41 +212,131 @@ jobs:
 
       - name: Commit and Push Changes (to Tenshi repo)
         if: always()
+        id: commit_push
         working-directory: tenshi
         run: |
-          git config --global --add safe.directory "*"
+          # 用户回复是最高优先级：这一份改动**必须**落到 Tenshi main。
+          # 统一走 scripts/tenshi_git_sync.py（reply 档：7 次重试 + 指数退避 +
+          # 无损冲突合并）。它替代了原先那段「push → fetch → rebase →
+          # checkout --ours → 重试」的模板——那段模板会在撞车时把本次回复
+          # 整体换成远端版本、把 rebase 卡在 .git/rebase-merge 里，然后
+          # 全程 >/dev/null 静默失败（2026-09-18 #3221 就是这么挂的）。
+          python -u scripts/tenshi_git_sync.py \
+            --repo . \
+            push \
+            --tier reply \
+            --message "天子已阅：对话与痕迹入档 [skip ci]" \
+            --files \
+              Tenshi.json \
+              data/tenshi_log.json \
+              data/context_compressions.json \
+              data/perception_schedule.json \
+              data/perception_state.json \
+              data/image_analysis_cache.json \
+              data/knowledge_base.json \
+              downloads/ \
+              logs/debug.log \
+              logs/llm_trace.jsonl \
+              logs/.gitkeep
 
-          git config --global user.name "比那名居 天子"
-          git config --global user.email "268836736+ZenjinruiNoHisouten@users.noreply.github.com"
+      # 落库自检：回复链路的要求是「无论如何都要落到 main」。tenshi_git_sync 已经把
+      # 重试做足了，这里再向 GitHub 反查一次那个 commit 是否真的在远端，避免出现
+      # 「步骤绿了但其实没落库」的假成功。
+      - name: Verify commit landed on Tenshi main
+        id: verify_landed
+        if: always()
+        working-directory: tenshi
+        env:
+          GH_TOKEN: ${{ secrets.TENSHI_BOT_ACTION_TOKEN }}
+          TENSHI_REPO: ${{ secrets.GH_REPO }}
+          COMMITTED_SHA: ${{ steps.commit_push.outputs.committed_sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set +e
+          if [ -z "${COMMITTED_SHA}" ]; then
+            echo "本次没有产生新提交（无变更），跳过落库自检"
+            exit 0
+          fi
+          if [ -z "$TENSHI_REPO" ]; then
+            echo "::warning::GH_REPO 未配置，跳过落库自检"
+            exit 0
+          fi
+          echo "自检：${COMMITTED_SHA} 是否已在 ${TENSHI_REPO}@${BRANCH}"
+          if gh api "repos/${TENSHI_REPO}/commits/${COMMITTED_SHA}" >/dev/null 2>&1; then
+            echo "落库自检通过：${COMMITTED_SHA:0:8} 已在远端"
+            exit 0
+          fi
+          echo "::error::落库自检失败：${COMMITTED_SHA:0:8} 不在 ${TENSHI_REPO}@${BRANCH} 上，本次回复没有进 main"
+          exit 1
 
-          # `--sparse` 是关键：即使将来有人往 git add 里加了白名单之外的路径，
-          # 也不会再被静默拒绝（宁可多加一个文件，也不要悄悄丢日志）。
-          git add --sparse Tenshi.json data/tenshi_log.json data/context_compressions.json data/perception_schedule.json data/image_analysis_cache.json data/knowledge_base.json downloads/ logs/debug.log logs/llm_trace.jsonl logs/.gitkeep || true
-          git commit -m "天子已阅：对话与痕迹入档 [skip ci]" >/dev/null 2>&1 || true
+      # 最后的兜底：只要「回复脚本失败」或「没能落库」，就把本轮全部状态（含 base64
+      # 编码的二进制/大文件）和一份完整 git bundle 传成 artifact。这是「就算失败也
+      # 一定要完整保存」的实现。artifact 相比加密包是明文，所以保留 7 天后自动过期。
+      - name: Backup full state to Artifacts (never lose a reply)
+        id: fallback_artifact
+        if: always() && (steps.process_message.outcome == 'failure' || steps.commit_push.outcome == 'failure' || steps.verify_landed.outcome == 'failure')
+        working-directory: tenshi
+        env:
+          RUN_ID: ${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          PROCESS_MESSAGE_OUTCOME: ${{ steps.process_message.outcome }}
+          COMMIT_PUSH_OUTCOME: ${{ steps.commit_push.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify_landed.outcome }}
+        run: |
+          set +e
+          set +o pipefail 2>/dev/null || true
+          staging="${RUNNER_TEMP:-/tmp}/tenshi-fallback-${RUN_ID}"
+          mkdir -p "$staging/b64"
+          if git rev-parse --verify "origin/${BRANCH}" >/dev/null 2>&1; then
+            unpushed="$(git log --oneline "origin/${BRANCH}..HEAD" 2>&1)"
+          else
+            unpushed="(origin/${BRANCH} 不存在，无法比对)"
+          fi
+          {
+            echo "run_id=${RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=$(git rev-parse HEAD 2>/dev/null)"
+            echo "branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+            echo "process_message=${PROCESS_MESSAGE_OUTCOME}"
+            echo "commit_push=${COMMIT_PUSH_OUTCOME}"
+            echo "verify_landed=${VERIFY_OUTCOME}"
+            echo
+            echo "--- git status --porcelain=v1 -b ---"
+            git status --porcelain=v1 -b 2>&1
+            echo
+            echo "--- git log -3 ---"
+            git log --oneline -3 2>&1
+            echo
+            echo "--- 未推送的提交（相对 origin/${BRANCH}） ---"
+            echo "$unpushed"
+          } > "$staging/_MANIFEST.txt" 2>&1
 
-          for attempt in 1 2 3; do
-            if git push >/dev/null 2>&1; then
-              exit 0
-            fi
-
-            git fetch origin main >/dev/null 2>&1
-
-            if ! git rebase origin/main >/dev/null 2>&1; then
-              if [ -n "$(git ls-files -u)" ]; then
-                git ls-files -u | awk '{print $4}' | sort -u | while IFS= read -r cf; do
-                  if [ -e "$cf" ]; then
-                    git checkout --ours -- "$cf" >/dev/null 2>&1 || true
-                    git add -- "$cf" >/dev/null 2>&1 || true
-                  fi
-                done
-                git rebase --continue >/dev/null 2>&1 || git rebase --skip >/dev/null 2>&1 || true
-              else
-                git rebase --abort >/dev/null 2>&1 || true
-              fi
+          files="data/tenshi_log.json data/context_compressions.json data/knowledge_base.json \
+            data/perception_schedule.json data/perception_state.json data/provider_health.json \
+            data/image_analysis_cache.json data/summary_cursor.json data/world_history.json \
+            logs/debug.log logs/llm_trace.jsonl"
+          for f in $files; do
+            [ -f "$f" ] || continue
+            mkdir -p "$staging/$(dirname "$f")"
+            if grep -qIl . "$f" 2>/dev/null; then
+              cp "$f" "$staging/$f"
+            else
+              # 二进制/非文本：base64 编码后再存，保证内容一个字节都不丢
+              base64 "$f" > "$staging/b64/$(echo "$f" | tr '/' '_').b64"
             fi
           done
+          # 完整的 git 状态（含未推送的提交）
+          git bundle create "$staging/tenshi-repo-${RUN_ID}.bundle" HEAD 2>&1 | tail -n 2
+          echo "备份目录内容：" && find "$staging" -type f | sort
 
-          git push >/dev/null 2>&1
+      - name: Upload full-state Artifact
+        if: steps.fallback_artifact.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenshi-full-state-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: ${{ runner.temp }}/tenshi-fallback-${{ github.run_id }}
 
       - name: Build encrypted failure bundle
         if: steps.process_message.outcome == 'failure' || failure()
@@ -247,13 +346,17 @@ jobs:
           MASTER_KEY_SOURCE: ${{ secrets.MASTER_KEY_SOURCE }}
         run: |
           set -e
-          test -n "$MASTER_KEY_SOURCE"
           bundle_name="tenshi_failure_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}.tar.gz"
           enc_name="${bundle_name}.enc"
+          if [ -z "$MASTER_KEY_SOURCE" ]; then
+            echo "::warning::MASTER_KEY_SOURCE 未配置，跳过加密失败包（完整状态仍在 full-state artifact 里）"
+            exit 0
+          fi
           tar -czf "/tmp/${bundle_name}" \
             data/tenshi_log.json \
             data/context_compressions.json \
             data/knowledge_base.json \
+            data/perception_state.json \
             logs/debug.log \
             logs/llm_trace.jsonl 2>/dev/null || true
           openssl enc -aes-256-cbc -pbkdf2 -salt \
@@ -264,28 +367,35 @@ jobs:
           echo "enc_file=${enc_name}" >> "$GITHUB_OUTPUT"
 
       - name: Push encrypted failure bundle to Tenshi
-        if: (steps.process_message.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != ''
+        if: steps.build_failure_bundle.outputs.enc_file != ''
         id: push_failure_bundle
         working-directory: tenshi
         run: |
+          # 关键修复：走 tenshi_git_sync（`git add --sparse` + 真实重试），
+          # 原来的 `git add secure_failures/...` 会被 sparse-checkout 直接拒绝，
+          # 再被 `|| true` 吞掉 → commit 里没有这个文件，却报告 pushed=true。
           set +e
           enc_file="${{ steps.build_failure_bundle.outputs.enc_file }}"
           mkdir -p secure_failures
           cp "${GITHUB_WORKSPACE}/${enc_file}" "secure_failures/${enc_file}"
-          git add "secure_failures/${enc_file}"
-          git commit -m "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" >/dev/null 2>&1
-          if git push >/dev/null 2>&1; then
+          if python -u scripts/tenshi_git_sync.py \
+              --repo . \
+              push \
+              --tier reply \
+              --message "天子应急备份：加密失败包 ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} [skip ci]" \
+              --files "secure_failures/${enc_file}"; then
             echo "pushed=true" >> "$GITHUB_OUTPUT"
           else
+            echo "::warning::加密失败包没能推回 Tenshi；完整状态已在 full-state artifact 里"
             echo "pushed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload encrypted fallback artifact
-        if: (steps.process_message.outcome == 'failure' || failure()) && steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
+        if: steps.build_failure_bundle.outputs.enc_file != '' && steps.push_failure_bundle.outputs.pushed != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tenshi-encrypted-failure-bundle
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
           path: ${{ steps.build_failure_bundle.outputs.enc_file }}
 
