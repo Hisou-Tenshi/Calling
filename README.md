@@ -405,4 +405,4 @@ Calling/
 - 产出：`reports/claude-proxy-reachability/`（`host/` 与 `container/` 各一份报告 + `compare.md`），
   同时进 Step Summary 与 artifact
 
-<p align="center"><sub>Copyright © 2026 緋想天子 (Hisou-Tenshi) · 最后更新 2026-09</sub></p>
+<p align="center"><sub>Copyright © 2026 緋想天子 (Hisou-Tenshi) · 最后更新 2026-10</sub></p>
