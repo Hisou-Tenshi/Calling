@@ -22,7 +22,7 @@
 #
 #  覆盖（按「类别 + 通路」，不按模型名）：
 #    claude 代理1 Base/Prime/Max · 代理2 · 官方 ｜ gemini 官方 · 代理 ｜
-#    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
+#    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ magmarouter 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
 #
 #  两档频率（真实调用模型很贵也很吃额度，所以拆开）：
@@ -62,7 +62,7 @@ on:
       providers:
         description: "要探测的类别（逗号分隔）"
         required: false
-        default: "claude,gemini,deepseek,gpt,glm,openrouter,grok"
+        default: "claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok"
       attempts:
         description: "每条通路的真实调用次数（仅 full）"
         required: false
@@ -117,10 +117,12 @@ jobs:
           GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
           GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
           GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
+          MAGMAROUTER_API_KEY: ${{ secrets.MAGMAROUTER_API_KEY }}
+          MAGMAROUTER_BASE_URL: ${{ secrets.MAGMAROUTER_BASE_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,openrouter,grok' }}
+          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok' }}
           PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
           DISPATCH_MODE: ${{ github.event.inputs.mode || '' }}
           SCHEDULE_CRON: ${{ github.event.schedule }}

@@ -19,6 +19,7 @@ from backend.llm_routing import (
     build_claude_proxy_configs,
     build_gemini_paths_from_settings,
     build_grok_paths_from_settings,
+    build_magmarouter_paths_from_settings,
     build_openrouter_paths_from_settings,
     run_grok_slot_path_first,
     run_path_first,
@@ -208,6 +209,11 @@ def _build_provider_messages(messages: list[dict[str, Any]]) -> list[dict[str, A
 def _is_grok_slot_model(model: str, settings: Any) -> bool:
     mid = (model or "").strip().lower()
     if mid.startswith("grok-"):
+        return True
+    magma_models = {
+        m.strip().lower() for m in (getattr(settings, "magmarouter_models", None) or [])
+    }
+    if mid in magma_models:
         return True
     or_model = (getattr(settings, "openrouter_model", "") or "").strip().lower()
     return "/" in mid or (or_model and mid == or_model)
@@ -640,8 +646,12 @@ def route_and_chat(
             ]
 
         if provider == "grok":
-            if not getattr(settings, "openrouter_api_key", None) and not getattr(settings, "grok_api_key", None):
-                raise RuntimeError("OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
+            if (
+                not getattr(settings, "magmarouter_api_key", None)
+                and not getattr(settings, "openrouter_api_key", None)
+                and not getattr(settings, "grok_api_key", None)
+            ):
+                raise RuntimeError("MAGMAROUTER_API_KEY / OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
             r = _grok_slot_invoke(
                 settings,
                 model=model,
@@ -893,12 +903,15 @@ def route_and_chat_stream(
             if provider == "grok":
                 grok_model = model if model.startswith("grok-") else "grok-4.3"
                 slot_attempts: list[tuple[dict[str, Any], str]] = []
+                for path in build_magmarouter_paths_from_settings(settings):
+                    for mr_model in (getattr(settings, "magmarouter_models", None) or []):
+                        slot_attempts.append((path, mr_model))
                 for path in build_openrouter_paths_from_settings(settings):
                     slot_attempts.append((path, getattr(settings, "openrouter_model", model)))
                 for path in build_grok_paths_from_settings(settings):
                     slot_attempts.append((path, grok_model))
                 if not slot_attempts:
-                    raise RuntimeError("OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
+                    raise RuntimeError("MAGMAROUTER_API_KEY / OPENROUTER_API_KEY / GROK_API_KEY is not configured.")
                 streamed = False
                 for path, slot_model in slot_attempts:
                     client = OpenAI(

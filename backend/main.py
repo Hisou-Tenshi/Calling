@@ -540,12 +540,14 @@ def create_app() -> FastAPI:
         openrouter_models = [
             settings.openrouter_model,
         ]
+        magmarouter_models = list(getattr(settings, "magmarouter_models", None) or [])
         # Keep it flat for UI: one selector can accept any supported model id.
         options = sorted(
             set(
                 [settings.trial_model]
                 + claude_models
                 + gemini_models
+                + magmarouter_models
                 + openrouter_models
                 + grok_models
                 + [settings.default_chat_model]

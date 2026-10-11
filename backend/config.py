@@ -15,6 +15,9 @@ class Settings:
     gemini_api_key: str | None
     claude_api_key: str | None
     grok_api_key: str | None
+    magmarouter_api_key: str | None
+    magmarouter_base_url: str | None
+    magmarouter_models: list[str]
     openrouter_api_key: str | None
     openrouter_base_url: str | None
     openrouter_model: str
@@ -73,6 +76,12 @@ class Settings:
     upstash_redis_rest_token: str | None
 
 
+def _parse_model_list(raw: str | None, *, default: tuple[str, ...]) -> list[str]:
+    """逗号分隔的模型清单（MAGMAROUTER_MODELS 等）；空/缺省时用 default。"""
+    items = [m.strip() for m in (raw or "").split(",") if m.strip()]
+    return items or list(default)
+
+
 def load_settings() -> Settings:
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -112,6 +121,13 @@ def load_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY") or None,
         claude_api_key=os.getenv("CLAUDE_API_KEY") or None,
         grok_api_key=os.getenv("GROK_API_KEY") or None,
+        # MagmaRouter（OpenAI 兼容网关，grok 槽主路；OpenRouter 降级为其后的备选）
+        magmarouter_api_key=os.getenv("MAGMAROUTER_API_KEY") or None,
+        magmarouter_base_url=os.getenv("MAGMAROUTER_BASE_URL") or "https://api.magmarouter.com/v1",
+        magmarouter_models=_parse_model_list(
+            os.getenv("MAGMAROUTER_MODELS"),
+            default=("glm-5.3-flash-xploded", "glm-5.3-xploded"),
+        ),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY") or None,
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL") or "https://openrouter.ai/api/v1",
         openrouter_model=(

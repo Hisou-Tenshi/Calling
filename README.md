@@ -383,7 +383,7 @@ Calling/
 - **每周一次**（JST 周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
   （`max_tokens` 极小），由它决定「模型层面能不能用」。
 
-覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini、deepseek、gpt、openrouter、grok
+覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini、deepseek、gpt、glm、magmarouter、openrouter、grok
 的**全部通路**；跑在回复任务同款容器里（容器的 DNS/出网/证书链与宿主 runner 不同，
 只在宿主上探会得出「一切正常」而容器里可能全灭）。
 

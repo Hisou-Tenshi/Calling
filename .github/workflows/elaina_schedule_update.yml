@@ -53,6 +53,8 @@ jobs:
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          MAGMAROUTER_API_KEY: ${{ secrets.MAGMAROUTER_API_KEY }}
+          MAGMAROUTER_BASE_URL: ${{ secrets.MAGMAROUTER_BASE_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
