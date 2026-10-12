@@ -518,24 +518,25 @@ def create_app() -> FastAPI:
             return {"default": settings.trial_model, "options": [settings.trial_model], "trial_only": True}
 
         claude_models = [
-            "claude-opus-4-7",
-            "claude-opus-4-6",
-            "claude-sonnet-4-7",
-            "claude-sonnet-4-6",
+            "claude-opus-5-5",
+            "claude-sonnet-5-5",
+            "claude-haiku-5-5",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5",
         ]
         gemini_models = [
             "gemini-3.1-pro-preview",
-            "gemini-3.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3-flash-preview",
-            "gemini-2.5-pro",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash-lite",
             "gemini-2.5-flash",
         ]
         grok_models = [
+            "grok-4.7",
+            "grok-4.6",
+            "grok-4.5",
             "grok-4.3",
-            "grok-4.20-multi-agent-0309",
-            "grok-4.20-0309-reasoning",
-            "grok-4.20-0309-non-reasoning",
         ]
         openrouter_models = [
             settings.openrouter_model,
