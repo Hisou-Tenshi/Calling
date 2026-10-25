@@ -2,8 +2,8 @@ name: Runtime Log Cleanup (Calling)
 
 on:
   schedule:
-    # UTC 18:05 — 在每日总结（17:11 UTC）之后执行；纯文件维护，不调用模型
-    - cron: '5 18 * * *'
+    # UTC 00:05 = 北京时间 08:05 — 在每日总结（最晚 UTC 23:11 = 北京 07:11）之后执行；纯文件维护，不调用模型
+    - cron: '5 0 * * *'
   workflow_dispatch:
 
 # 与回复/总结均独立；仅操作 logs/ 与 downloads/
@@ -29,7 +29,7 @@ jobs:
 
       - name: Get Date
         id: date
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+        run: echo "date=$(date -u -d '+8 hours' +'%Y-%m-%d')" >> $GITHUB_OUTPUT  # 北京时间日期
 
       - name: Archive and clean runtime logs
         working-directory: tenshi

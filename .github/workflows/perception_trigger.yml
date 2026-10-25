@@ -200,7 +200,8 @@ jobs:
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
-          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          # 时间口径统一为北京时间（UTC+8）：固定传 8，不再依赖 TIMEZONE_OFFSET secret。
+          TIMEZONE_OFFSET: "8"
           PERCEPTION_SCHEDULED_FORCE: ${{ github.event.client_payload.scheduled_force }}
           PERCEPTION_SCHEDULE_NOTE: ${{ github.event.client_payload.note }}
           PERCEPTION_TRIGGER_AT_MS: ${{ github.event.client_payload.trigger_at_ms }}

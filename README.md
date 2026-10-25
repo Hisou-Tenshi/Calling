@@ -378,9 +378,9 @@ Calling/
 还是 **key 被禁用 / 额度用尽 / 模型不可用**。本仓库代跑 Tenshi 的探活工作流
 `.github/workflows/provider_health.yml`（脚本、判据、结果 JSON 都属于 Tenshi 仓库）：
 
-- **每 6 小时**（JST 02 / 08 / 14 / 20）→ `--mode quick`：DNS → TCP → TLS → `GET /models`
+- **每 6 小时**（北京时间 02 / 08 / 14 / 20，UTC+8）→ `--mode quick`：DNS → TCP → TLS → `GET /models`
   鉴权，**不调用模型**；沿用上一次 full 的真实调用结论。
-- **每周一次**（JST 周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
+- **每周一次**（北京时间 周日 02:30，UTC+8）→ `--mode full`：在上面三层之后再真的调一次模型
   （`max_tokens` 极小），由它决定「模型层面能不能用」。
 
 覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini、deepseek、gpt、glm、magmarouter、openrouter、grok

@@ -1,5 +1,5 @@
 # =============================================================================
-#  Provider Health Probe —— 每天 JST 02:00 探活所有 provider 的通路，结果登记进 Tenshi
+#  Provider Health Probe —— 每天北京时间 02:00 探活所有 provider 的通路，结果登记进 Tenshi
 # =============================================================================
 #
 #  为什么（2026-09-15 事故的教训）：
@@ -26,10 +26,10 @@
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
 #
 #  两档频率（真实调用模型很贵也很吃额度，所以拆开）：
-#    · 每 6 小时（JST 02/08/14/20）→ `--mode quick`：DNS → TCP → TLS → GET /models 鉴权，
+#    · 每 6 小时（北京时间 02/08/14/20）→ `--mode quick`：DNS → TCP → TLS → GET /models 鉴权，
 #      **不调用模型**；quick 会沿用上一次 full 的真实调用结论（带它自己的时间戳），
 #      所以周级判红的通路在两次 full 之间依然保持被 ban。
-#    · 每周一次（JST 周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
+#    · 每周一次（北京时间周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
 #      （max_tokens 极小），由它决定「模型层面能不能用」。
 #
 #  产出（都提交回 Tenshi 仓库）：
@@ -39,19 +39,19 @@
 #  失败语义：探活脚本自身异常才让 run 变红；某条通路是红**不算**失败（那是被探出来的
 #  事实，运行时自己会 ban 掉）。
 #
-#  时区：cron 只认 UTC。JST 02:00 = 前一日 17:00 UTC。
+#  时区：cron 只认 UTC。北京时间 02:00 = 前一日 18:00 UTC。
 # =============================================================================
 
 name: Provider Health Probe (Tenshi)
 
 on:
   schedule:
-    # 每 6 小时（JST 02:00 / 08:00 / 14:00 / 20:00）：**只跑到「列模型」为止**
+    # 每 6 小时（北京时间 02:00 / 08:00 / 14:00 / 20:00）：**只跑到「列模型」为止**
     # —— DNS → TCP → TLS → GET /models（鉴权），不调用模型、不产生生成计费。
-    - cron: "0 17,23,5,11 * * *"
-    # 每周一次**真实调用**（JST 周日 02:30 = 周六 17:30 UTC）：
+    - cron: "0 18,0,6,12 * * *"
+    # 每周一次**真实调用**（北京时间周日 02:30 = 周六 18:30 UTC）：
     # 在上面三层之后，再对每条通路真的发一次 max_tokens 极小的请求。
-    - cron: "30 17 * * 6"
+    - cron: "30 18 * * 6"
   workflow_dispatch:
     inputs:
       mode:
@@ -135,7 +135,7 @@ jobs:
           #   每周一次 → full（再加一次真实调用，结论由 quick 沿用）
           MODE="$DISPATCH_MODE"
           if [ -z "$MODE" ]; then
-            if [ "$SCHEDULE_CRON" = "30 17 * * 6" ]; then
+            if [ "$SCHEDULE_CRON" = "30 18 * * 6" ]; then
               MODE="full"
             else
               MODE="quick"
@@ -205,5 +205,5 @@ jobs:
             --git-email "97383295+Hisou-Tenshi@users.noreply.github.com" \
             push \
             --tier perceive \
-            --message "Provider 探活：$(date -u '+%Y-%m-%d %H:%M UTC')（${SUMMARY}） [skip ci]" \
+            --message "Provider 探活：$(date -u -d '+8 hours' '+%Y-%m-%d %H:%M') 北京时间（${SUMMARY}） [skip ci]" \
             --files data/provider_health.json reports/provider_health

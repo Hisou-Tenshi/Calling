@@ -1,11 +1,11 @@
 name: Scheduled Update (Calling)
 
-# Tenshi 每日总结：执行窗口为本地 22:00–08:00（默认 TIMEZONE_OFFSET=9 → JST）。
+# Tenshi 每日总结：执行窗口为本地 22:00–08:00（固定 TIMEZONE_OFFSET=8 → 北京时间 / UTC+8）。
 # 窗口内每小时尝试一次；log_update 若判定「窗口外 / 最近 45 分钟仍有对话」会跳过且不推进 cursor。
-# UTC 13:11–22:11 = JST 22:11–07:11（08:00 为窗口上界，不调度整点 08:00）。
+# UTC 14:11–23:11 = 北京时间 22:11–07:11（08:00 为窗口上界，不调度整点 08:00）。
 on:
   schedule:
-    - cron: '11 13-22 * * *'
+    - cron: '11 14-23 * * *'
   workflow_dispatch:
 
 # 总结专用并发组：与回复/感知（tenshi-bot-reply）并行，互不排队阻塞。
@@ -38,7 +38,7 @@ jobs:
 
       - name: Get Date
         id: date
-        run: echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+        run: echo "date=$(date -u -d '+8 hours' +'%Y-%m-%d')" >> $GITHUB_OUTPUT  # 北京时间日期
 
       - name: Run Log Update
         id: update_script
@@ -72,7 +72,8 @@ jobs:
           GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
           AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
           GAODE_API_KEY: ${{ secrets.GAODE_API_KEY }}
-          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          # 时间口径统一为北京时间（UTC+8）：固定传 8，不再依赖 TIMEZONE_OFFSET secret。
+          TIMEZONE_OFFSET: "8"
           LOG_UPDATE_SOFT_TIMEOUT_SECONDS: "1400"
           DAILY_SUMMARY_CUTOFF_HOUR: "4"
           DAILY_SUMMARY_SILENCE_THRESHOLD_SECONDS: "10800"

@@ -199,7 +199,8 @@ jobs:
           MSG_DATE: ${{ github.event.client_payload.date }}
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
-          TIMEZONE_OFFSET: ${{ secrets.TIMEZONE_OFFSET }}
+          # 时间口径统一为北京时间（UTC+8）：固定传 8，不再依赖 TIMEZONE_OFFSET secret。
+          TIMEZONE_OFFSET: "8"
           PERCEPTION_SCHEDULE_SYNC_URL: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_URL }}
           PERCEPTION_SCHEDULE_SYNC_SECRET: ${{ secrets.PERCEPTION_SCHEDULE_SYNC_SECRET }}
         run: |
