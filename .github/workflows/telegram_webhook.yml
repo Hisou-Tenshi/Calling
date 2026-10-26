@@ -197,6 +197,7 @@ jobs:
           MSG_FILE_IDS: ${{ toJSON(github.event.client_payload.file_ids) }}
           MSG_LOCATION: ${{ toJSON(github.event.client_payload.location) }}
           MSG_DATE: ${{ github.event.client_payload.date }}
+          MSG_REPLY_TO: ${{ toJSON(github.event.client_payload.reply_to) }}
           IS_RANDOM_TRIGGER: ${{ github.event.client_payload.is_random_trigger }}
           CURRENT_WEATHER: ${{ github.event.client_payload.weather }}
           # 时间口径统一为北京时间（UTC+8）：固定传 8，不再依赖 TIMEZONE_OFFSET secret。
