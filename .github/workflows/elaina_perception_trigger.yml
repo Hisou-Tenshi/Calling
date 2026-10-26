@@ -133,6 +133,8 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.ELAINA_TG_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Qwen embedding（取代 Gemini embedding）
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
           GEMINI_PROXY_BASE_URL: ${{ secrets.GEMINI_PROXY_BASE_URL }}
           GEMINI_PROXY_KEY: ${{ secrets.GEMINI_PROXY_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
