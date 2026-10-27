@@ -1,12 +1,12 @@
 # =============================================================================
-#  Provider Health Probe —— 每天北京时间 02:00 探活所有 provider 的通路，结果登记进 Tenshi
+#  Provider Health Probe —— 每 6 小时探活所有 provider 的通路，结果登记进 Tenshi
 # =============================================================================
 #
 #  为什么（2026-09-15 事故的教训）：
 #    回复链的每一次调用都可能落在「官方 / 代理 1 三档 / 代理 2 / Fireworks…」里的任意一条
 #    通路上。通路坏了以前只能等线上真调用失败才知道，而失败信息可能只剩一句
 #    `APIConnectionError: Connection error.`（真实原因藏在 __cause__ 里）。
-#    这里改成**每天先探活**：结果写进 Tenshi 仓库的 data/provider_health.json，
+#    这里改成**定期先探活**：结果写进 Tenshi 仓库的 data/provider_health.json，
 #    运行时由 Tenshi 的 src/provider_health.py 读取 —— 绿则照常调用，红则在最外层 ban
 #    （丢掉该通路 / 传空 key，让既有逻辑自己抛「没有可用通路」再往下一档走）。
 #
@@ -25,15 +25,18 @@
 #    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ magmarouter 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
 #
-#  两档频率（真实调用模型很贵也很吃额度，所以拆开）：
-#    · 每 6 小时（北京时间 02/08/14/20）→ `--mode quick`：DNS → TCP → TLS → GET /models 鉴权，
-#      **不调用模型**；quick 会沿用上一次 full 的真实调用结论（带它自己的时间戳），
-#      所以周级判红的通路在两次 full 之间依然保持被 ban。
-#    · 每周一次（北京时间周日 02:30）→ `--mode full`：在上面三层之后再真的调一次模型
-#      （max_tokens 极小），由它决定「模型层面能不能用」。
+#  **不真实调用模型**（2026-10 调整）：
+#    探活不再发送任何会产出 token 的生成请求（不创建消息、不调 chat 补全 / generateContent），
+#    所以没有生成费用、也不吃生成额度。模型维度改用官方「非生成」端点判断：
+#      · GET /models 鉴权 + 模型列表成员校验（免费）；
+#      · Anthropic /v1/messages/count_tokens、Gemini :countTokens（官方 token 计数，不产出 token）；
+#      · 端点没实现 / 拿不到结论 → 该层按「没结论」处理（fail-open，不 ban）。
+#    既然没有真实调用，也就不再有「沿用上一次 full 结论」这回事。
+#
+#  频率：每 6 小时（北京时间 02/08/14/20）跑一次；也可手动 dispatch。
 #
 #  产出（都提交回 Tenshi 仓库）：
-#    · data/provider_health.json         —— 机读结果（运行时 gate 读它；含三层检查各自的时间戳）
+#    · data/provider_health.json         —— 机读结果（运行时 gate 读它；含三层检查留痕）
 #    · reports/provider_health/latest.md —— 人读报告（同时也进 Step Summary / artifact）
 #
 #  失败语义：探活脚本自身异常才让 run 变红；某条通路是红**不算**失败（那是被探出来的
@@ -46,27 +49,16 @@ name: Provider Health Probe (Tenshi)
 
 on:
   schedule:
-    # 每 6 小时（北京时间 02:00 / 08:00 / 14:00 / 20:00）：**只跑到「列模型」为止**
-    # —— DNS → TCP → TLS → GET /models（鉴权），不调用模型、不产生生成计费。
+    # 每 6 小时（北京时间 02:00 / 08:00 / 14:00 / 20:00）：
+    # DNS → TCP → TLS → GET /models（鉴权）→ 模型列表 / count tokens 校验，
+    # 全程不调用生成式端点，不产生生成计费、不吃生成额度。
     - cron: "0 18,0,6,12 * * *"
-    # 每周一次**真实调用**（北京时间周日 02:30 = 周六 18:30 UTC）：
-    # 在上面三层之后，再对每条通路真的发一次 max_tokens 极小的请求。
-    - cron: "30 18 * * 6"
   workflow_dispatch:
     inputs:
-      mode:
-        description: "探测深度"
-        type: choice
-        options: ["full", "quick"]
-        default: "full"
       providers:
         description: "要探测的类别（逗号分隔）"
         required: false
         default: "claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok"
-      attempts:
-        description: "每条通路的真实调用次数（仅 full）"
-        required: false
-        default: "1"
       commit_result:
         description: "把结果提交回 Tenshi 仓库"
         type: boolean
@@ -152,28 +144,12 @@ jobs:
           GLM_REASONING_EFFORT_AGENT: ${{ secrets.GLM_REASONING_EFFORT_AGENT }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok' }}
-          PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
-          DISPATCH_MODE: ${{ github.event.inputs.mode || '' }}
-          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -uo pipefail
-          # 真实调用模型很贵、也很吃额度，所以拆成两档：
-          #   每 6 小时 → quick（DNS/TCP/TLS + 列模型鉴权，不调用模型）
-          #   每周一次 → full（再加一次真实调用，结论由 quick 沿用）
-          MODE="$DISPATCH_MODE"
-          if [ -z "$MODE" ]; then
-            if [ "$SCHEDULE_CRON" = "30 18 * * 6" ]; then
-              MODE="full"
-            else
-              MODE="quick"
-            fi
-          fi
-          echo "探测模式：${MODE}（触发：${SCHEDULE_CRON:-手动}）"
-
+          # 探活全程只走官方非生成端点（列模型 / count tokens），不真实调用模型：
+          # 没有生成费用，也不吃生成额度。
           python -u tenshi/scripts/probe_provider_paths.py \
-            --mode "$MODE" \
             --providers "$PROBE_PROVIDERS" \
-            --attempts "$PROBE_ATTEMPTS" \
             --json tenshi/data/provider_health.json \
             --report tenshi/reports/provider_health/latest.md
 
@@ -217,8 +193,8 @@ jobs:
                   paths = entry.get("paths") or {}
                   good = sum(1 for p in paths.values() if p.get("ok"))
                   parts.append(f"{provider}:{'绿' if entry.get('enabled') else '红'}{good}/{len(paths)}")
-              mode = data.get("mode") or "?"
-              print(f"[{mode}] " + (" ".join(parts) or "无结果"))
+              method = data.get("probe_method") or "non_call"
+              print(f"[{method}] " + (" ".join(parts) or "无结果"))
           except Exception:
               print("结果不可读")
           PY
