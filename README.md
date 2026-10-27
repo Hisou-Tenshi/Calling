@@ -383,9 +383,20 @@ Calling/
 - **每周一次**（北京时间 周日 02:30，UTC+8）→ `--mode full`：在上面三层之后再真的调一次模型
   （`max_tokens` 极小），由它决定「模型层面能不能用」。
 
-覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini、deepseek、gpt、glm、magmarouter、openrouter、grok
-的**全部通路**；跑在回复任务同款容器里（容器的 DNS/出网/证书链与宿主 runner 不同，
+覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini（代理1/代理2/OpenRouter/官方）、
+deepseek（官方/Fireworks/OpenRouter）、gpt（代理/OpenRouter/官方）、grok（代理/OpenRouter/官方）、
+glm（官方/OpenRouter）、magmarouter、openrouter 的**全部通路**——通路顺序直接复用 Tenshi 的
+`config/providers.py PROVIDER_PATH_POLICIES` 与 `llm_routing.build_*_paths()`，探的就是跑的。
+Claude 代理侧优先用 `claude-haiku-4-5` / `claude-haiku-4-5-20251001` 探测（代理普遍还没上 5.5，
+拿 5.5 去探会把好代理探成「模型不可用」），候选都不可用才回落到各档旗舰。
+跑在回复任务同款容器里（容器的 DNS/出网/证书链与宿主 runner 不同，
 只在宿主上探会得出「一切正常」而容器里可能全灭）。
+
+运行前确保本仓库 Secrets 已注入新增的渠道/代理变量（与 Tenshi `.env.example` 的 [C] 段同名）：
+`GEMINI_PROXY2_BASE_URL/KEY`、`GPT_PROXY_BASE_URL/KEY`、`GROK_PROXY_BASE_URL/KEY`、
+`CODERPLAN_PROXY_BASE_URL`、`CLAUDE_OFFICIAL_BASE_URL`、`GEMINI_OFFICIAL_BASE_URL`、
+`DEEPSEEK_BASE_URL`、`QWEN_BASE_URL`、`OPENROUTER_FALLBACK_MAP` 等；
+改完可跑 Tenshi 的 `scripts/check_env_matrix.py --strict` 校验矩阵是否完整。
 
 结果写回 **Tenshi** 仓库的 `data/provider_health.json`（运行时 gate 读它：绿则照常调用，
 红则在最外层 ban 掉）与 `reports/provider_health/latest.md`，同时进 Step Summary 与 artifact。

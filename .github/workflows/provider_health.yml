@@ -125,6 +125,31 @@ jobs:
           MAGMAROUTER_BASE_URL: ${{ secrets.MAGMAROUTER_BASE_URL }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          # --- 统一代理/通路配置（每个代理 URL 与 key 独立可设；secret 未配置时回落到代码默认）---
+          CODERPLAN_PROXY_BASE_URL: ${{ secrets.CODERPLAN_PROXY_BASE_URL }}
+          CLAUDE_OFFICIAL_BASE_URL: ${{ secrets.CLAUDE_OFFICIAL_BASE_URL }}
+          GEMINI_OFFICIAL_BASE_URL: ${{ secrets.GEMINI_OFFICIAL_BASE_URL }}
+          GEMINI_PROXY2_BASE_URL: ${{ secrets.GEMINI_PROXY2_BASE_URL }}
+          GEMINI_PROXY2_KEY: ${{ secrets.GEMINI_PROXY2_KEY }}
+          GPT_PROXY_BASE_URL: ${{ secrets.GPT_PROXY_BASE_URL }}
+          GPT_PROXY_KEY: ${{ secrets.GPT_PROXY_KEY }}
+          GROK_BASE_URL: ${{ secrets.GROK_BASE_URL }}
+          GROK_PROXY_BASE_URL: ${{ secrets.GROK_PROXY_BASE_URL }}
+          GROK_PROXY_KEY: ${{ secrets.GROK_PROXY_KEY }}
+          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          QWEN_BASE_URL: ${{ secrets.QWEN_BASE_URL }}
+          EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
+          EMBEDDING_DIM: ${{ secrets.EMBEDDING_DIM }}
+          EMBEDDING_MAX_INPUT_CHARS: ${{ secrets.EMBEDDING_MAX_INPUT_CHARS }}
+          FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
+          OPENROUTER_FALLBACK_MAP: ${{ secrets.OPENROUTER_FALLBACK_MAP }}
+          PROVIDER_HEALTH_ENABLED: ${{ secrets.PROVIDER_HEALTH_ENABLED }}
+          PROVIDER_HEALTH_MAX_AGE_HOURS: ${{ secrets.PROVIDER_HEALTH_MAX_AGE_HOURS }}
+          PROVIDER_HEALTH_PATH: ${{ secrets.PROVIDER_HEALTH_PATH }}
+          GPT_REASONING_EFFORT: ${{ secrets.GPT_REASONING_EFFORT }}
+          GPT_TOOL_REASONING_EFFORT: ${{ secrets.GPT_TOOL_REASONING_EFFORT }}
+          GLM_REASONING_EFFORT: ${{ secrets.GLM_REASONING_EFFORT }}
+          GLM_REASONING_EFFORT_AGENT: ${{ secrets.GLM_REASONING_EFFORT_AGENT }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok' }}
           PROBE_ATTEMPTS: ${{ github.event.inputs.attempts || '1' }}
