@@ -282,7 +282,9 @@ jobs:
 
       # 回写 **Calling** 仓库（不是 Tenshi）：这是 Calling primary 运行时自己的探活结果。
       - name: Commit result to Calling
-        if: always() && (github.event_name == 'schedule' || github.event.inputs.commit_result != 'false')
+        # 只有探活步骤真的成功才回写：否则 always() 会把「上一次的旧 JSON / 重新渲染的看板」
+        # 当成新结果提交（2026-10-28 同步步骤失败时实际发生过）。
+        if: always() && steps.probe.outcome == 'success' && (github.event_name == 'schedule' || github.event.inputs.commit_result != 'false')
         run: |
           set -uo pipefail
           if [ ! -d .git ]; then
