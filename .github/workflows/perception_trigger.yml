@@ -66,6 +66,20 @@ jobs:
             # sparse-checkout 拒绝并被 || true 吞掉（2026-09-18 排查确认）。
             secure_failures/
 
+      # Calling 运行时读**本仓库**的探活结果（用 Calling secrets 探出来的那份），
+      # 不读 tenshi/data/ 下 Tenshi 仓库的那份 —— 两套运行时各自独立。
+      # 只稀疏拉 data/ 到 calling/，不动 tenshi/ 检出（避免弄脏导致 rebase/autostash 风险）；
+      # 文件缺失时 src/provider_health.py 会 fail-open（全部通路照常调用），
+      # 所以这一步失败也不该挡住感知/回复流程 —— continue-on-error 保留原执行语义。
+      - name: Checkout Calling data (provider health gate input)
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          path: calling
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            data/
+
       - name: "Guard: skip perception if webhook running"
         id: guard_webhook
         env:
@@ -212,7 +226,9 @@ jobs:
           OPENROUTER_FALLBACK_MAP: ${{ secrets.OPENROUTER_FALLBACK_MAP }}
           PROVIDER_HEALTH_ENABLED: ${{ secrets.PROVIDER_HEALTH_ENABLED }}
           PROVIDER_HEALTH_MAX_AGE_HOURS: ${{ secrets.PROVIDER_HEALTH_MAX_AGE_HOURS }}
-          PROVIDER_HEALTH_PATH: ${{ secrets.PROVIDER_HEALTH_PATH }}
+          # 读**本仓（Calling）**的探活结果：Calling secrets 探出来的结论，
+          # 由 provider_health.yml 回写到 calling/data/。文件缺失时 fail-open。
+          PROVIDER_HEALTH_PATH: ${{ github.workspace }}/calling/data/provider_health.json
           GPT_REASONING_EFFORT: ${{ secrets.GPT_REASONING_EFFORT }}
           GPT_TOOL_REASONING_EFFORT: ${{ secrets.GPT_TOOL_REASONING_EFFORT }}
           GLM_REASONING_EFFORT: ${{ secrets.GLM_REASONING_EFFORT }}

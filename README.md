@@ -344,10 +344,11 @@ Calling/
 ├── data/
 │   ├── uploads/          # 上传文件存放目录
 │   ├── conversations.json
-│   └── rag.sqlite3       # RAG 向量数据库
+│   ├── rag.sqlite3       # RAG 向量数据库
+│   └── provider_health.json  # 探活结果（Calling secrets 探出；运行时 gate 读它）
 ├── scripts/
 │   └── claude_proxy_reachability.py  # Claude 代理可达性探测（GitHub Actions 用）
-├── reports/              # 探测报告（由工作流自动生成/提交）
+├── reports/              # 探活/诊断报告（provider_health、claude-proxy-reachability，由工作流自动生成/提交）
 ├── .env.example
 └── requirements.txt
 ```
@@ -375,21 +376,25 @@ Calling/
 ## 通路探活（Provider Health，GitHub Actions）
 
 线上「某个 provider 一路降级」时，很难判断是 **runner 出网到不了通路**、**证书/域名变了**，
-还是 **key 被禁用 / 额度用尽 / 模型不可用**。本仓库代跑 Tenshi 的探活工作流
-`.github/workflows/provider_health.yml`（脚本、判据、结果 JSON 都属于 Tenshi 仓库）：
+还是 **key 被禁用 / 额度用尽 / 模型不可用**。本仓库是 Tenshi 回复的 **primary 运行时**
+（Calling secrets + Tenshi 代码），日常探活就在这里跑：`.github/workflows/provider_health.yml`
+用**本仓库的 Calling secrets** 探活，结果**存回 Calling 仓库**。探活脚本与 dashboard 脚本
+仍来自 Tenshi 检出（`tenshi/scripts/`，代码共享），但变量与结果按仓库归属：Calling 的密钥
+探出来的结论只给 Calling 运行时用。
 
 - **每 6 小时**（北京时间 02 / 08 / 14 / 20，UTC+8）：DNS → TCP → TLS → `GET /models` 鉴权 →
-  模型列表 / count tokens 校验。**全程只走官方「非生成」端点，不真实调用模型**：
-  没有生成费用，也不吃生成额度；判不出来的通路按「没结论」放行（fail-open，不 ban）。
-  余额 / 额度类问题不会在这些免费端点暴露（只在真调用时出现），这类交给运行时的
-  超时 + 逐档降级兜底。
+  **全模型**逐项非生成校验（模型列表成员 / count tokens）；**全程只走官方「非生成」端点，
+  不真实调用模型**：没有生成费用，也不吃生成额度；判不出来的通路按「没结论」放行
+  （fail-open，不 ban）。余额 / 额度类问题不会在这些免费端点暴露（只在真调用时出现），
+  这类交给运行时的超时 + 逐档降级兜底。
 
 覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini（代理1/代理2/OpenRouter/官方）、
 deepseek（官方/Fireworks/OpenRouter）、gpt（代理/OpenRouter/官方）、grok（代理/OpenRouter/官方）、
 glm（官方/OpenRouter）、magmarouter、openrouter 的**全部通路**——通路顺序直接复用 Tenshi 的
 `config/providers.py PROVIDER_PATH_POLICIES` 与 `llm_routing.build_*_paths()`，探的就是跑的。
-Claude 代理侧优先用 `claude-haiku-4-5` / `claude-haiku-4-5-20251001` 探测（代理普遍还没上 5.5，
-拿 5.5 去探会把好代理探成「模型不可用」），候选都不可用才回落到各档旗舰。
+每条通路再按 Tenshi 模型注册表把**该 provider 的全部模型**逐一核对（含 Claude 的日期快照），
+通路级结论由模型级汇总：任一模型可用 → 通路绿；判不出来 → 「没结论」放行（fail-open）。
+运行时 gate 只认通路级 `ok`/`severity`，模型级结论是用于定位「哪个模型不可用」的细化信息。
 跑在回复任务同款容器里（容器的 DNS/出网/证书链与宿主 runner 不同，
 只在宿主上探会得出「一切正常」而容器里可能全灭）。
 
@@ -399,12 +404,25 @@ Claude 代理侧优先用 `claude-haiku-4-5` / `claude-haiku-4-5-20251001` 探�
 `DEEPSEEK_BASE_URL`、`QWEN_BASE_URL`、`OPENROUTER_FALLBACK_MAP` 等；
 改完可跑 Tenshi 的 `scripts/check_env_matrix.py --strict` 校验矩阵是否完整。
 
-结果写回 **Tenshi** 仓库的 `data/provider_health.json`（运行时 gate 读它：绿则照常调用，
-红则在最外层 ban 掉）与 `reports/provider_health/latest.md`，同时进 Step Summary 与 artifact。
+### 结果在哪、运行时怎么读
 
-> 为什么探活跑在 Calling 而不是 Tenshi：完整的一套 provider secrets 在**本仓库**
-> （Tenshi 仓库只有一部分，例如代理1 的三档 key 就只配在这里），而探活必须用运行时
-> 真正拿到的那套密钥，否则会漏探、误报。详见 Tenshi 的 README「通路探活与红通路屏蔽」。
+- `data/provider_health.json` —— 机读结果（运行时 gate 读它：绿则照常调用，红则在最外层 ban 掉）
+- `reports/provider_health/latest.md` —— 人读报告（同时进 Step Summary 与 artifact）
+- `reports/provider_health/history.jsonl` —— 每次一行历史（dashboard 趋势用）
+- `reports/provider_health/dashboard.html` / `dashboard.md` —— 趋势看板
+
+Calling 的 3 个运行时 workflow（`telegram_webhook.yml`、`perception_trigger.yml`、
+`schedule_update.yml`）在 Checkout Tenshi 之后把本仓 `data/` 稀疏检出到 `calling/`，并让
+`PROVIDER_HEALTH_PATH` 指向 `${{ github.workspace }}/calling/data/provider_health.json` ——
+读的是 **Calling 自己的**那份探活结果。该文件缺失时 `src/provider_health.py` 会 fail-open
+（全部通路照常调用、不 ban），所以检出失败也不会挡住回复。
+
+> **两套运行时各自独立**：Tenshi 仓库是 **fallback 运行时**，用 Tenshi 的 secrets，有自己的
+> 探活工作流，结果存 Tenshi 仓库、由 Tenshi 运行时读它自己那份。两边刻意不共享探活结果——
+> 探活必须用各自运行时真正拿到的那套密钥，否则会「用 Calling 的变量探、按 Tenshi 的结论 ban」。
+> 探活仍跑在 Calling 是因为完整的一套 provider secrets 在**本仓库**（Tenshi 仓库只有一部分，
+> 例如代理1 的三档 key 只配在这里）；脚本属于 Tenshi 只是代码共享，产物归属不变。
+> Tenshi 侧的探活细节见 Tenshi README「通路探活与红通路屏蔽」。
 
 ### Claude 代理深度诊断（手动）
 
