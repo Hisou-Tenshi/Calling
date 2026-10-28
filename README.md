@@ -410,6 +410,22 @@ glm（官方/OpenRouter）、magmarouter、openrouter 的**全部通路**——�
 - `reports/provider_health/latest.md` —— 人读报告（同时进 Step Summary 与 artifact）
 - `reports/provider_health/history.jsonl` —— 每次一行历史（dashboard 趋势用）
 - `reports/provider_health/dashboard.html` / `dashboard.md` —— 趋势看板
+- `reports/provider_health/tenshi-dashboard.html` —— Tenshi 那份看板的副本（供 Vercel 渲染）
+
+### 浏览器看板（Vercel）
+
+GitHub 里点 `.html` 只会**显示源码**、不会渲染，所以看板统一挂在本仓库的 Vercel 站点上
+（`backend/main.py` 新增只读路由，直接从仓库里的自包含 HTML 返回）：
+
+| 路径 | 内容 |
+|---|---|
+| `/dashboard` | 一个页面里切换 **Calling primary** / **Tenshi fallback** 两份看板 |
+| `/dashboard/calling` | Calling 运行时（Calling secrets）的探活看板 |
+| `/dashboard/tenshi` | Tenshi 备用运行时的探活看板（`provider_health.yml` 从 Tenshi 检出把 `dashboard.html` 复制成 `reports/provider_health/tenshi-dashboard.html`） |
+
+- 每次探活提交都会触发 Vercel 自动重新部署，页面随之更新（`Cache-Control: no-store`）。
+- 若 Vercel 项目开了 **Deployment Protection（SSO）**，需要先登录 Vercel 才能打开。
+- 看板只含 URL、状态与**掩码后的 key 前缀**，不含完整密钥。
 
 Calling 的 3 个运行时 workflow（`telegram_webhook.yml`、`perception_trigger.yml`、
 `schedule_update.yml`）在 Checkout Tenshi 之后把本仓 `data/` 稀疏检出到 `calling/`，并让

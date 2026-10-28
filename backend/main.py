@@ -313,6 +313,106 @@ def create_app() -> FastAPI:
             if os.path.exists(static_dir):
                 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+    # ----------------------------
+    # Provider Health 看板（浏览器直接看）
+    # ----------------------------
+    # 探活工作流把「自包含 HTML 看板」提交进仓库：GitHub 上点 .html 只会显示源码，
+    # 挂到 Vercel 才能像网页一样渲染。这里从仓库文件读出来直接返回：
+    #   /dashboard          —— 一份页面里切换 Calling primary / Tenshi fallback 两份看板
+    #   /dashboard/calling  —— Calling 运行时（Calling secrets）的看板
+    #   /dashboard/tenshi   —— Tenshi 备用运行时的看板（Calling 探活工作流会从 Tenshi
+    #                          检出复制到 reports/provider_health/tenshi-dashboard.html）
+    # 注意：这两份看板只包含 URL、状态与 **掩码后的 key 前缀**，不含完整密钥。
+    dashboard_dir = os.path.join(project_root, "reports", "provider_health")
+
+    def _load_dashboard_html(filename: str) -> str | None:
+        path = os.path.join(dashboard_dir, filename)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                return handle.read()
+        except OSError:
+            return None
+
+    def _dashboard_missing_html(side_label: str) -> str:
+        return (
+            "<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\">"
+            "<title>Provider Health</title>"
+            "<body style=\"font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',"
+            "'PingFang SC','Microsoft YaHei',sans-serif;background:#0f1115;color:#e6e8ee;"
+            "display:flex;align-items:center;justify-content:center;height:100vh;margin:0\">"
+            f"<div style=\"max-width:640px;padding:32px;border:1px solid #2a2f3a;border-radius:12px;"
+            f"background:#161a22\"><h1 style=\"font-size:18px;margin:0 0 12px\">还没有 {side_label} 的探活看板</h1>"
+            "<p style=\"line-height:1.7;color:#aab1c0\">工作流跑完一次探活后会生成 "
+            "<code>reports/provider_health/dashboard.html</code> 并提交/部署；"
+            "如果是第一次部署，先等下一次探活或手动 dispatch <code>provider_health.yml</code>。</p>"
+            "</div></body></html>"
+        )
+
+    _dashboard_index_html = """<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Provider Health · 探活看板</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0f1115; color:#e6e8ee;
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  header { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+           padding:12px 18px; border-bottom:1px solid #232833; background:#12151c; }
+  h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:.3px; }
+  .tabs { display:flex; gap:8px; }
+  .tab { cursor:pointer; border:1px solid #2a3140; background:#171b24; color:#b9c2d0;
+         padding:6px 12px; border-radius:8px; font-size:13px; }
+  .tab.active { border-color:#3d6ef7; color:#fff; background:#1b2540; }
+  .meta { margin-left:auto; color:#78839a; font-size:12px; }
+  .meta a { color:#7fa4ff; text-decoration:none; }
+  iframe { width:100%; height:calc(100vh - 53px); border:0; display:block; background:#0f1115; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Provider Health · 探活看板</h1>
+  <div class="tabs">
+    <button class="tab active" data-side="calling">Calling primary</button>
+    <button class="tab" data-side="tenshi">Tenshi fallback</button>
+  </div>
+  <div class="meta">不真实调用模型 · 自动刷新页面数据请重新部署后查看 · <a href="/">返回 Calling</a></div>
+</header>
+<iframe id="frame" src="/dashboard/calling" title="provider health dashboard"></iframe>
+<script>
+  document.querySelectorAll('.tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      var side = btn.getAttribute('data-side');
+      document.getElementById('frame').src = '/dashboard/' + side;
+      document.title = 'Provider Health · ' + btn.textContent;
+    });
+  });
+</script>
+</body>
+</html>"""
+
+    @app.get("/dashboard", include_in_schema=False)
+    async def provider_health_dashboard():
+        return HTMLResponse(_dashboard_index_html, headers={"Cache-Control": "no-store"})
+
+    @app.get("/dashboard/calling", include_in_schema=False)
+    async def provider_health_dashboard_calling():
+        content = _load_dashboard_html("dashboard.html")
+        if content is None:
+            return HTMLResponse(_dashboard_missing_html("Calling primary"), status_code=200)
+        return HTMLResponse(content, headers={"Cache-Control": "no-store"})
+
+    @app.get("/dashboard/tenshi", include_in_schema=False)
+    async def provider_health_dashboard_tenshi():
+        content = _load_dashboard_html("tenshi-dashboard.html")
+        if content is None:
+            return HTMLResponse(_dashboard_missing_html("Tenshi fallback"), status_code=200)
+        return HTMLResponse(content, headers={"Cache-Control": "no-store"})
+
     tool_exec = make_tool_exec(project_root)
 
     def _conversation_owner(request: Request) -> str:

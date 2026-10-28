@@ -114,6 +114,8 @@ jobs:
         if: github.ref_name == 'main'
         run: |
           set -uo pipefail
+          # job 跑在容器里，checkout 出来的仓库 owner 与容器内用户不一致，git 会拒绝操作。
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch origin main
           git reset --hard origin/main
 
@@ -227,10 +229,30 @@ jobs:
             --out-html reports/provider_health/dashboard.html \
             --out-md reports/provider_health/dashboard.md
 
+      # /dashboard/tenshi 需要 Tenshi 的看板 HTML：Tenshi 检出是按默认分支最新 checkout 的，
+      # 这里把它复制进 Calling 的 reports/ 一起提交；Vercel 部署后 /dashboard/tenshi 直接渲染。
+      # （GitHub 上点 .html 只会显示源码，所以看板统一挂到 Vercel。）
+      - name: Stage Tenshi dashboard for /dashboard/tenshi
+        if: always()
+        run: |
+          set -uo pipefail
+          mkdir -p reports/provider_health
+          SRC="tenshi/reports/provider_health/dashboard.html"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" reports/provider_health/tenshi-dashboard.html
+            echo "已复制 Tenshi 看板（Tenshi main 最新一次探活产物）"
+          else
+            echo "::warning::Tenshi 看板尚不存在（Tenshi 探活还没产出 dashboard.html），本次跳过 /dashboard/tenshi"
+          fi
+
       - name: Publish report to Step Summary
         if: always()
         run: |
           set -uo pipefail
+          {
+            echo "> 🌐 浏览器看板（Vercel）：`/dashboard`（Calling / Tenshi 两份切换）"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
           if [ -f reports/provider_health/latest.md ]; then
             cat reports/provider_health/latest.md >> "$GITHUB_STEP_SUMMARY"
           else
