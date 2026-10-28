@@ -3,8 +3,8 @@
 > ⚠️ **全部通路可用；2 条标黄（照常调用，不 ban）** · 共 22 条通路 · 8 个类别
 
 - 部署：**Calling primary 运行时（Calling secrets）**
-- 生成时间：`2026-10-28 21:07:04`（北京时间 UTC+8） / `2026-10-28T13:07:04+00:00`（UTC）
-- 环境：容器 · run `40693028507` · schema 4
+- 生成时间：`2026-10-28 21:19:42`（北京时间 UTC+8） / `2026-10-28T13:19:42+00:00`（UTC）
+- 环境：容器 · run `40694911652` · schema 4
 - 探活方式：不真实调用模型（官方非生成端点：DNS/TCP/TLS → 列模型鉴权 → 模型列表 / count tokens）
 - 全模型覆盖：**26 / 27**（96.3%）
 
@@ -28,63 +28,63 @@
 
 | 通路 | claude-opus-5-5 | claude-opus-5 | claude-sonnet-5-5 | claude-sonnet-5 | claude-haiku-4-5 | claude-haiku-4-5-20251001 | claude-haiku-5-5 | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|---|
-| `Proxy 1 Base` | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 143.3 ms |
-| `Proxy 1 Prime` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 151.4 ms |
-| `Proxy 1 Max` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 148.8 ms |
-| `Proxy 2` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 595.2 ms |
-| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 182 ms |
+| `Proxy 1 Base` | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 145.5 ms |
+| `Proxy 1 Prime` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 121.9 ms |
+| `Proxy 1 Max` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 113.3 ms |
+| `Proxy 2` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 690.9 ms |
+| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 195.8 ms |
 
 ### `gemini` · ⚠️ 1 条黄（绿 3 / 黄 1 / 红 0 / 未配置 0）
 
 | 通路 | gemini-4-argon | gemini-3.1-pro-preview | gemini-3.8-flash | gemini-3.7-flash | gemini-3.5-flash-lite | gemini-3.1-flash-lite | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|
-| `Gemini Proxy` | ⚠️ | ⚠️ | ❌ | ⚠️ | ⚠️ | ⚠️ | ⚠️ 模型不可用 | 202.8 ms |
-| `Gemini Proxy 2` | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ 可用 | 580.1 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 322.4 ms |
-| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 146.8 ms |
+| `Gemini Proxy` | ⚠️ | ⚠️ | ❌ | ⚠️ | ⚠️ | ⚠️ | ⚠️ 模型不可用 | 197 ms |
+| `Gemini Proxy 2` | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ 可用 | 640 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 443.5 ms |
+| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 232.4 ms |
 
 ### `deepseek` · ⚠️ 1 条黄（绿 2 / 黄 1 / 红 0 / 未配置 0）
 
 | 通路 | deepseek-v4-pro | deepseek-flash | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Official` | ✅ | ✅ | ✅ 可用 | 286.5 ms |
-| `Fireworks DeepSeek Pro` | ⚠️ | ⚠️ | ⚠️ 模型不可用 | 228 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 77.6 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 377.2 ms |
+| `Fireworks DeepSeek Pro` | ⚠️ | ⚠️ | ⚠️ 模型不可用 | 378.3 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 177.6 ms |
 
 ### `gpt` · ✅ 全部可用（绿 3 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | gpt-6-luna | 结论 | 延迟 |
 |---|---|---|---|
-| `GPT Proxy` | ➖ | ✅ 可用 | 593.8 ms |
-| `OpenRouter` | ✅ | ✅ 可用 | 74.7 ms |
-| `OpenAI` | ✅ | ✅ 可用 | 746.6 ms |
+| `GPT Proxy` | ➖ | ✅ 可用 | 493.4 ms |
+| `OpenRouter` | ✅ | ✅ 可用 | 191.3 ms |
+| `OpenAI` | ✅ | ✅ 可用 | 793.8 ms |
 
 ### `glm` · ✅ 全部可用（绿 2 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | glm-5.3 | glm-5.3-flash | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Official` | ✅ | ✅ | ✅ 可用 | 253.9 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 78.4 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 264.8 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 170.9 ms |
 
 ### `magmarouter` · ✅ 全部可用（绿 1 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | deepseek-v4.1-flash-1017-xploded | glm-5.3-flash-xploded | glm-5.3-xploded | qwen3.8-27b-xploded | magma-1-xploded | mimo-v2.6-flash-xploded | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|
-| `MagmaRouter` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 可用 | 487.1 ms |
+| `MagmaRouter` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 可用 | 562.4 ms |
 
 ### `openrouter` · ✅ 全部可用（绿 1 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | cognitivecomputations/dolphin-mistral-24b-venice-edition | 结论 | 延迟 |
 |---|---|---|---|
-| `OpenRouter` | ✅ | ✅ 可用 | 80.6 ms |
+| `OpenRouter` | ✅ | ✅ 可用 | 179.8 ms |
 
 ### `grok` · ✅ 全部可用（绿 3 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | grok-4.7 | grok-4.6 | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Grok Proxy` | ➖ | ➖ | ✅ 可用 | 430.7 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 75.9 ms |
-| `Official` | ✅ | ✅ | ✅ 可用 | 159.9 ms |
+| `Grok Proxy` | ➖ | ➖ | ✅ 可用 | 497.8 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 187.2 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 172.8 ms |
 
 ## 最近历史（最近 12 次）
 
@@ -92,33 +92,34 @@
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-28 20:27:50 | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 2026-10-28 21:07:04 | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 2026-10-28 21:19:42 | ✅ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **通路历史可用率**（可用 = 绿 + 黄；红才算不可用，分母是有结论的次数）：
 
 | 通路 | 可用率 | 可用/观测 |
 |---|---|---|
-| `claude / Proxy 1 Base` | 100% | 2/2 |
-| `claude / Proxy 1 Prime` | 100% | 2/2 |
-| `claude / Proxy 1 Max` | 100% | 2/2 |
-| `claude / Proxy 2` | 100% | 2/2 |
-| `claude / Official` | 100% | 2/2 |
-| `gemini / Gemini Proxy` | 100% | 2/2 |
-| `gemini / Gemini Proxy 2` | 100% | 2/2 |
-| `gemini / OpenRouter` | 100% | 2/2 |
-| `gemini / Official` | 100% | 2/2 |
-| `deepseek / Official` | 100% | 2/2 |
-| `deepseek / Fireworks DeepSeek Pro` | 100% | 2/2 |
-| `deepseek / OpenRouter` | 100% | 2/2 |
-| `gpt / GPT Proxy` | 100% | 2/2 |
-| `gpt / OpenRouter` | 100% | 2/2 |
-| `gpt / OpenAI` | 100% | 2/2 |
-| `glm / Official` | 100% | 2/2 |
-| `glm / OpenRouter` | 100% | 2/2 |
-| `magmarouter / MagmaRouter` | 100% | 2/2 |
-| `openrouter / OpenRouter` | 100% | 2/2 |
-| `grok / Grok Proxy` | 100% | 2/2 |
-| `grok / OpenRouter` | 100% | 2/2 |
-| `grok / Official` | 100% | 2/2 |
+| `claude / Proxy 1 Base` | 100% | 3/3 |
+| `claude / Proxy 1 Prime` | 100% | 3/3 |
+| `claude / Proxy 1 Max` | 100% | 3/3 |
+| `claude / Proxy 2` | 100% | 3/3 |
+| `claude / Official` | 100% | 3/3 |
+| `gemini / Gemini Proxy` | 100% | 3/3 |
+| `gemini / Gemini Proxy 2` | 100% | 3/3 |
+| `gemini / OpenRouter` | 100% | 3/3 |
+| `gemini / Official` | 100% | 3/3 |
+| `deepseek / Official` | 100% | 3/3 |
+| `deepseek / Fireworks DeepSeek Pro` | 100% | 3/3 |
+| `deepseek / OpenRouter` | 100% | 3/3 |
+| `gpt / GPT Proxy` | 100% | 3/3 |
+| `gpt / OpenRouter` | 100% | 3/3 |
+| `gpt / OpenAI` | 100% | 3/3 |
+| `glm / Official` | 100% | 3/3 |
+| `glm / OpenRouter` | 100% | 3/3 |
+| `magmarouter / MagmaRouter` | 100% | 3/3 |
+| `openrouter / OpenRouter` | 100% | 3/3 |
+| `grok / Grok Proxy` | 100% | 3/3 |
+| `grok / OpenRouter` | 100% | 3/3 |
+| `grok / Official` | 100% | 3/3 |
 
 ## 图例与说明
 
