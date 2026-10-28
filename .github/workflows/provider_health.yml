@@ -91,59 +91,75 @@ jobs:
         id: probe
         env:
           PYTHONUNBUFFERED: "1"
+          # --- 统一代理/通路配置（每个代理 URL 与 key 独立可设；secret 未配置时回落到代码默认）---
+          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok' }}
+          # Claude
+          CLAUDE_OFFICIAL_BASE_URL: ${{ secrets.CLAUDE_OFFICIAL_BASE_URL }}
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          # Claude 代理 1
           CLAUDE_PROXY_BASE_URL: ${{ secrets.CLAUDE_PROXY_BASE_URL }}
           CLAUDE_PROXY_KEY_BASE: ${{ secrets.CLAUDE_PROXY_KEY_BASE }}
           CLAUDE_PROXY_KEY_PRIME: ${{ secrets.CLAUDE_PROXY_KEY_PRIME }}
           CLAUDE_PROXY_KEY_MAX: ${{ secrets.CLAUDE_PROXY_KEY_MAX }}
+          # Claude 代理 2
           CLAUDE_PROXY_BASE_URL_2: ${{ secrets.CLAUDE_PROXY_BASE_URL_2 }}
           CLAUDE_PROXY_KEY_2: ${{ secrets.CLAUDE_PROXY_KEY_2 }}
+          # Gemini
+          GEMINI_OFFICIAL_BASE_URL: ${{ secrets.GEMINI_OFFICIAL_BASE_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          # Qwen embedding（取代 Gemini embedding）
-          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          # Gemini 代理 1
           GEMINI_PROXY_BASE_URL: ${{ secrets.GEMINI_PROXY_BASE_URL }}
           GEMINI_PROXY_KEY: ${{ secrets.GEMINI_PROXY_KEY }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
-          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
-          FIREWORKS_BASE_URL: ${{ secrets.FIREWORKS_BASE_URL }}
-          FIREWORKS_DEEPSEEK_V4_PRO_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_PRO_MODEL }}
-          FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
-          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
-          GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
-          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
-          GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
-          MAGMAROUTER_API_KEY: ${{ secrets.MAGMAROUTER_API_KEY }}
-          MAGMAROUTER_BASE_URL: ${{ secrets.MAGMAROUTER_BASE_URL }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
-          # --- 统一代理/通路配置（每个代理 URL 与 key 独立可设；secret 未配置时回落到代码默认）---
-          CODERPLAN_PROXY_BASE_URL: ${{ secrets.CODERPLAN_PROXY_BASE_URL }}
-          CLAUDE_OFFICIAL_BASE_URL: ${{ secrets.CLAUDE_OFFICIAL_BASE_URL }}
-          GEMINI_OFFICIAL_BASE_URL: ${{ secrets.GEMINI_OFFICIAL_BASE_URL }}
+          # Gemini 代理 2
           GEMINI_PROXY2_BASE_URL: ${{ secrets.GEMINI_PROXY2_BASE_URL }}
           GEMINI_PROXY2_KEY: ${{ secrets.GEMINI_PROXY2_KEY }}
-          GPT_PROXY_BASE_URL: ${{ secrets.GPT_PROXY_BASE_URL }}
-          GPT_PROXY_KEY: ${{ secrets.GPT_PROXY_KEY }}
+          # Grok
           GROK_BASE_URL: ${{ secrets.GROK_BASE_URL }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          # Grok 代理 1
           GROK_PROXY_BASE_URL: ${{ secrets.GROK_PROXY_BASE_URL }}
           GROK_PROXY_KEY: ${{ secrets.GROK_PROXY_KEY }}
+          # GPT
+          GPT_BASE_URL: ${{ secrets.GPT_BASE_URL }}
+          GPT_API_KEY: ${{ secrets.GPT_API_KEY }}
+          GPT_REASONING_EFFORT: ${{ secrets.GPT_REASONING_EFFORT }}
+          GPT_TOOL_REASONING_EFFORT: ${{ secrets.GPT_TOOL_REASONING_EFFORT }}
+          # GPT 代理 1
+          GPT_PROXY_BASE_URL: ${{ secrets.GPT_PROXY_BASE_URL }}
+          GPT_PROXY_KEY: ${{ secrets.GPT_PROXY_KEY }}
+          # DeepSeek
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # DeepSeek 代理 1
+          FIREWORKS_BASE_URL: ${{ secrets.FIREWORKS_BASE_URL }}
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+          FIREWORKS_DEEPSEEK_V4_PRO_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_PRO_MODEL }}
+          FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
+          # GLM
+          GLM_BASE_URL: ${{ secrets.GLM_BASE_URL }}
+          GLM_API_KEY: ${{ secrets.GLM_API_KEY }}
+          GLM_REASONING_EFFORT: ${{ secrets.GLM_REASONING_EFFORT }}
+          GLM_REASONING_EFFORT_AGENT: ${{ secrets.GLM_REASONING_EFFORT_AGENT }}
+          # MagmaRouter
+          MAGMAROUTER_BASE_URL: ${{ secrets.MAGMAROUTER_BASE_URL }}
+          MAGMAROUTER_API_KEY: ${{ secrets.MAGMAROUTER_API_KEY }}
+          # OpenRouter
+          OPENROUTER_BASE_URL: ${{ secrets.OPENROUTER_BASE_URL }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_FALLBACK_MAP: ${{ secrets.OPENROUTER_FALLBACK_MAP }}
+          # Qwen embedding（取代 Gemini embedding）
           QWEN_BASE_URL: ${{ secrets.QWEN_BASE_URL }}
+          QWEN_API_KEY: ${{ secrets.QWEN_API_KEY }}
+          # embedding
           EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
           EMBEDDING_DIM: ${{ secrets.EMBEDDING_DIM }}
           EMBEDDING_MAX_INPUT_CHARS: ${{ secrets.EMBEDDING_MAX_INPUT_CHARS }}
-          FIREWORKS_DEEPSEEK_V4_FLASH_MODEL: ${{ secrets.FIREWORKS_DEEPSEEK_V4_FLASH_MODEL }}
-          OPENROUTER_FALLBACK_MAP: ${{ secrets.OPENROUTER_FALLBACK_MAP }}
+          # CoderPlan
+          CODERPLAN_PROXY_BASE_URL: ${{ secrets.CODERPLAN_PROXY_BASE_URL }}
+          #探活
           PROVIDER_HEALTH_ENABLED: ${{ secrets.PROVIDER_HEALTH_ENABLED }}
           PROVIDER_HEALTH_MAX_AGE_HOURS: ${{ secrets.PROVIDER_HEALTH_MAX_AGE_HOURS }}
           PROVIDER_HEALTH_PATH: ${{ secrets.PROVIDER_HEALTH_PATH }}
-          GPT_REASONING_EFFORT: ${{ secrets.GPT_REASONING_EFFORT }}
-          GPT_TOOL_REASONING_EFFORT: ${{ secrets.GPT_TOOL_REASONING_EFFORT }}
-          GLM_REASONING_EFFORT: ${{ secrets.GLM_REASONING_EFFORT }}
-          GLM_REASONING_EFFORT_AGENT: ${{ secrets.GLM_REASONING_EFFORT_AGENT }}
-          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          PROBE_PROVIDERS: ${{ github.event.inputs.providers || 'claude,gemini,deepseek,gpt,glm,magmarouter,openrouter,grok' }}
         run: |
           set -uo pipefail
           # 探活全程只走官方非生成端点（列模型 / count tokens），不真实调用模型：
