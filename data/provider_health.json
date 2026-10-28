@@ -1,0 +1,1850 @@
+{
+  "schema": 4,
+  "generated_at_utc": "2026-10-28T12:27:50+00:00",
+  "generated_at_bj": "2026-10-28 20:27:50",
+  "environment": "容器",
+  "deployment": "calling",
+  "deployment_label": "Calling primary 运行时（Calling secrets）",
+  "run_id": "40687515403",
+  "script": "scripts/probe_provider_paths.py",
+  "probe_method": "official_non_call",
+  "coverage": {
+    "claude": 7,
+    "gemini": 6,
+    "deepseek": 2,
+    "gpt": 1,
+    "glm": 2,
+    "magmarouter": 6,
+    "openrouter": 1,
+    "grok": 2
+  },
+  "providers": {
+    "claude": {
+      "enabled": true,
+      "paths": {
+        "Proxy 1 Base": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 137.1,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 252.8,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "5/7 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 225.2,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:27:50+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 225.2,
+          "base_url": "https://codeyu.shop",
+          "model": "claude-haiku-4-5",
+          "key_masked": "sk-1…",
+          "models_total": 7,
+          "models_ok": 5,
+          "models": {
+            "claude-opus-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 252.8
+            },
+            "claude-opus-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 252.8
+            },
+            "claude-sonnet-5-5": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"claude-sonnet-5-5\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 273.5
+            },
+            "claude-sonnet-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 252.8
+            },
+            "claude-haiku-4-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 252.8
+            },
+            "claude-haiku-4-5-20251001": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 252.8
+            },
+            "claude-haiku-5-5": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"claude-haiku-5-5\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 225.2
+            }
+          }
+        },
+        "Proxy 1 Prime": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 133.1,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 191.7,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "6/7 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 191.7,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:27:51+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 191.7,
+          "base_url": "https://codeyu.shop",
+          "model": "claude-haiku-4-5",
+          "key_masked": "sk-9…",
+          "models_total": 7,
+          "models_ok": 6,
+          "models": {
+            "claude-opus-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-opus-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-sonnet-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-sonnet-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-haiku-4-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-haiku-4-5-20251001": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 191.7
+            },
+            "claude-haiku-5-5": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"claude-haiku-5-5\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 216.5
+            }
+          }
+        },
+        "Proxy 1 Max": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 126.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 231.8,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "6/7 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 219.3,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:27:52+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 219.3,
+          "base_url": "https://codeyu.shop",
+          "model": "claude-haiku-4-5",
+          "key_masked": "sk-e…",
+          "models_total": 7,
+          "models_ok": 6,
+          "models": {
+            "claude-opus-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-opus-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-sonnet-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-sonnet-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-haiku-4-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-haiku-4-5-20251001": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 231.8
+            },
+            "claude-haiku-5-5": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"claude-haiku-5-5\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 219.3
+            }
+          }
+        },
+        "Proxy 2": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 418.6,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 743.6,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "7/7 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 743.6,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:27:52+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 743.6,
+          "base_url": "https://api.coderplan.ai",
+          "model": "claude-haiku-4-5",
+          "key_masked": "sk-k…",
+          "models_total": 7,
+          "models_ok": 7,
+          "models": {
+            "claude-opus-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-opus-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-sonnet-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-sonnet-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-haiku-4-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-haiku-4-5-20251001": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            },
+            "claude-haiku-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 743.6
+            }
+          }
+        },
+        "Official": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 22.0,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 136.1,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "7/7 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 136.1,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:27:54+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 136.1,
+          "base_url": "https://api.anthropic.com",
+          "model": "claude-haiku-4-5",
+          "key_masked": "sk-a…",
+          "models_total": 7,
+          "models_ok": 7,
+          "models": {
+            "claude-opus-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-opus-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-opus-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-sonnet-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-sonnet-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-sonnet-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-haiku-4-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-haiku-4-5-20251001": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-4-5-20251001）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            },
+            "claude-haiku-5-5": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（claude-haiku-5-5）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 136.1
+            }
+          }
+        }
+      },
+      "probe_model": "claude-haiku-4-5",
+      "models_total": 7,
+      "models_ok": 7
+    },
+    "gemini": {
+      "enabled": true,
+      "paths": {
+        "Gemini Proxy": {
+          "ok": true,
+          "severity": "warn",
+          "verdict": "model_not_found",
+          "verdict_text": "5/6 个模型可用但不理想：模型不可用（404）：HTTP 404：Model \"gemini-4-argon\" is not supported by any configured account in this group",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 123.8,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 11199.5,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "verdict_text": "5/6 个模型可用但不理想：模型不可用（404）：HTTP 404：Model \"gemini-4-argon\" is not supported by any configured account in this group",
+              "severity": "warn",
+              "latency_ms": 252.8,
+              "status": 404,
+              "checked_at_utc": "2026-10-28T12:27:54+00:00",
+              "method": "count_tokens"
+            }
+          },
+          "model_check_method": "count_tokens",
+          "status": 404,
+          "latency_ms": 252.8,
+          "base_url": "https://codeyu.shop",
+          "model": "gemini-3.5-flash-lite",
+          "key_masked": "sk-c…",
+          "models_total": 6,
+          "models_ok": 0,
+          "models": {
+            "gemini-4-argon": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"gemini-4-argon\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 286.8
+            },
+            "gemini-3.1-pro-preview": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"gemini-3.1-pro-preview\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 252.8
+            },
+            "gemini-3.8-flash": {
+              "ok": false,
+              "verdict": "upstream_error",
+              "severity": "red",
+              "detail": "上游错误（502）：HTTP 502：Upstream service temporarily unavailable",
+              "method": "count_tokens",
+              "status": 502,
+              "latency_ms": 17298.6
+            },
+            "gemini-3.7-flash": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"gemini-3.7-flash\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 284.0
+            },
+            "gemini-3.5-flash-lite": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"gemini-3.5-flash-lite\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 297.8
+            },
+            "gemini-3.1-flash-lite": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不可用（404）：HTTP 404：Model \"gemini-3.1-flash-lite\" is not supported by any configured account in this group",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 264.2
+            }
+          }
+        },
+        "Gemini Proxy 2": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 399.9,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 742.7,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "3/6 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 710.5,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:24+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 710.5,
+          "base_url": "https://api.coderplan.ai",
+          "model": "gemini-3.5-flash-lite",
+          "key_masked": "sk-5…",
+          "models_total": 6,
+          "models_ok": 3,
+          "models": {
+            "gemini-4-argon": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-4-argon）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 742.7
+            },
+            "gemini-3.1-pro-preview": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 gemini-3.1-pro-preview，列表 6 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 710.5
+            },
+            "gemini-3.8-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.8-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 742.7
+            },
+            "gemini-3.7-flash": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 gemini-3.7-flash，列表 6 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 735.7
+            },
+            "gemini-3.5-flash-lite": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 gemini-3.5-flash-lite，列表 6 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "count_tokens",
+              "status": 404,
+              "latency_ms": 720.1
+            },
+            "gemini-3.1-flash-lite": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.1-flash-lite）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 742.7
+            }
+          }
+        },
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 18.5,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 347.8,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "6/6 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 347.8,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:28+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 347.8,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "google/gemini-3.5-flash-lite",
+          "key_masked": "sk-o…",
+          "models_total": 6,
+          "models_ok": 6,
+          "models": {
+            "gemini-4-argon": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-4-argon）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            },
+            "gemini-3.1-pro-preview": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-3.1-pro-preview）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            },
+            "gemini-3.8-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-3.8-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            },
+            "gemini-3.7-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-3.7-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            },
+            "gemini-3.5-flash-lite": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-3.5-flash-lite）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            },
+            "gemini-3.1-flash-lite": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（google/gemini-3.1-flash-lite）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 347.8
+            }
+          }
+        },
+        "Official": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 27.6,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 119.1,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "6/6 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 119.1,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:28+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 119.1,
+          "base_url": "https://generativelanguage.googleapis.com",
+          "model": "gemini-3.5-flash-lite",
+          "key_masked": "AIza…",
+          "models_total": 6,
+          "models_ok": 6,
+          "models": {
+            "gemini-4-argon": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-4-argon）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            },
+            "gemini-3.1-pro-preview": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.1-pro-preview）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            },
+            "gemini-3.8-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.8-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            },
+            "gemini-3.7-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.7-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            },
+            "gemini-3.5-flash-lite": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.5-flash-lite）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            },
+            "gemini-3.1-flash-lite": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gemini-3.1-flash-lite）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 119.1
+            }
+          }
+        }
+      },
+      "probe_model": "gemini-3.5-flash-lite",
+      "models_total": 6,
+      "models_ok": 6
+    },
+    "deepseek": {
+      "enabled": true,
+      "paths": {
+        "Official": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 75.9,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 320.2,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 320.2,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:28+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 320.2,
+          "base_url": "https://api.deepseek.com",
+          "model": "deepseek-flash",
+          "key_masked": "sk-0…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "deepseek-v4-pro": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（deepseek-v4-pro）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 320.2
+            },
+            "deepseek-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（deepseek-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 320.2
+            }
+          }
+        },
+        "Fireworks DeepSeek Pro": {
+          "ok": true,
+          "severity": "warn",
+          "verdict": "model_not_found",
+          "verdict_text": "2/2 个模型可用但不理想：模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-pro，列表 29 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 33.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 327.2,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "verdict_text": "2/2 个模型可用但不理想：模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-pro，列表 29 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "severity": "warn",
+              "latency_ms": 327.2,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:29+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 327.2,
+          "base_url": "https://api.fireworks.ai/inference/v1",
+          "model": "accounts/fireworks/models/deepseek-v4-flash",
+          "key_masked": "fw_E…",
+          "models_total": 2,
+          "models_ok": 0,
+          "models": {
+            "deepseek-v4-pro": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-pro，列表 29 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 327.2
+            },
+            "deepseek-flash": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-flash，列表 29 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 327.2
+            }
+          }
+        },
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 20.6,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 45.9,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 45.9,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:29+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 45.9,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "deepseek/deepseek-v4.1-flash-1017",
+          "key_masked": "sk-o…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "deepseek-v4-pro": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（deepseek/deepseek-v4-pro）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 45.9
+            },
+            "deepseek-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（deepseek/deepseek-v4.1-flash-1017）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 45.9
+            }
+          }
+        }
+      },
+      "probe_model": "deepseek-flash",
+      "models_total": 2,
+      "models_ok": 2
+    },
+    "gpt": {
+      "enabled": true,
+      "paths": {
+        "GPT Proxy": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过（auth、model 未下结论，按可用处理）",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 418.7,
+              "status": null
+            },
+            "auth": {
+              "ok": null,
+              "verdict": "unknown",
+              "verdict_text": "该通路未实现列模型端点（404），本次不下结论：HTTP 404：HTTP 404 Not Found",
+              "severity": "unknown",
+              "latency_ms": 657.8,
+              "status": 404
+            },
+            "model": {
+              "ok": null,
+              "verdict": "unknown",
+              "verdict_text": "1 个模型均未下结论：鉴权未通过，本次不核对模型列表（由鉴权层下结论）",
+              "severity": "unknown",
+              "latency_ms": 657.8,
+              "status": 404,
+              "checked_at_utc": "2026-10-28T12:28:29+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 404,
+          "latency_ms": 657.8,
+          "base_url": "https://api.coderplan.ai",
+          "model": "gpt-6-luna",
+          "key_masked": "sk-3…",
+          "models_total": 1,
+          "models_ok": 0,
+          "models": {
+            "gpt-6-luna": {
+              "ok": null,
+              "verdict": "unknown",
+              "severity": "unknown",
+              "detail": "鉴权未通过，本次不核对模型列表（由鉴权层下结论）",
+              "method": "models_list",
+              "status": 404,
+              "latency_ms": 657.8
+            }
+          }
+        },
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 19.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 69.8,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "1/1 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 69.8,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:31+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 69.8,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "openai/gpt-6-luna",
+          "key_masked": "sk-o…",
+          "models_total": 1,
+          "models_ok": 1,
+          "models": {
+            "gpt-6-luna": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（openai/gpt-6-luna）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 69.8
+            }
+          }
+        },
+        "OpenAI": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 16.8,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 941.9,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "1/1 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 941.9,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:31+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 941.9,
+          "base_url": "https://api.openai.com/v1",
+          "model": "gpt-6-luna",
+          "key_masked": "sk-p…",
+          "models_total": 1,
+          "models_ok": 1,
+          "models": {
+            "gpt-6-luna": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（gpt-6-luna）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 941.9
+            }
+          }
+        }
+      },
+      "probe_model": "gpt-6-luna",
+      "models_total": 1,
+      "models_ok": 1
+    },
+    "glm": {
+      "enabled": true,
+      "paths": {
+        "Official": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 110.6,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 349.2,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 349.2,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:32+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 349.2,
+          "base_url": "https://open.bigmodel.cn/api/paas/v4",
+          "model": "glm-5.3",
+          "key_masked": "a3c7…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "glm-5.3": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（glm-5.3）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 349.2
+            },
+            "glm-5.3-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（glm-5.3-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 349.2
+            }
+          }
+        },
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 16.1,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 60.9,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 60.9,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:32+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 60.9,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "z-ai/glm-5.3",
+          "key_masked": "sk-o…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "glm-5.3": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（z-ai/glm-5.3）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 60.9
+            },
+            "glm-5.3-flash": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（z-ai/glm-5.3-flash）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 60.9
+            }
+          }
+        }
+      },
+      "probe_model": "glm-5.3",
+      "models_total": 2,
+      "models_ok": 2
+    },
+    "magmarouter": {
+      "enabled": true,
+      "paths": {
+        "MagmaRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 20.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 615.0,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "5/6 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 615.0,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:32+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 615.0,
+          "base_url": "https://api.magmarouter.com/v1",
+          "model": "deepseek-v4.1-flash-1017-xploded",
+          "key_masked": "sk-m…",
+          "models_total": 6,
+          "models_ok": 5,
+          "models": {
+            "deepseek-v4.1-flash-1017-xploded": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（deepseek-v4.1-flash-1017-xploded）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            },
+            "glm-5.3-flash-xploded": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（glm-5.3-flash-xploded）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            },
+            "glm-5.3-xploded": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（glm-5.3-xploded）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            },
+            "qwen3.8-27b-xploded": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（qwen3.8-27b-xploded）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            },
+            "magma-1-xploded": {
+              "ok": true,
+              "verdict": "model_not_found",
+              "severity": "warn",
+              "detail": "模型不在该通路的模型列表里（探测 magma-1-xploded，列表 6 个）（只做非生成校验，不发真实调用）；判黄不 ban",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            },
+            "mimo-v2.6-flash-xploded": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（mimo-v2.6-flash-xploded）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 615.0
+            }
+          }
+        }
+      },
+      "probe_model": "deepseek-v4.1-flash-1017-xploded",
+      "models_total": 6,
+      "models_ok": 5
+    },
+    "openrouter": {
+      "enabled": true,
+      "paths": {
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 16.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 48.9,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "1/1 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 48.9,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:33+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 48.9,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+          "key_masked": "sk-o…",
+          "models_total": 1,
+          "models_ok": 1,
+          "models": {
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（cognitivecomputations/dolphin-mistral-24b-venice-edition）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 48.9
+            }
+          }
+        }
+      },
+      "probe_model": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+      "models_total": 1,
+      "models_ok": 1
+    },
+    "grok": {
+      "enabled": true,
+      "paths": {
+        "Grok Proxy": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过（auth、model 未下结论，按可用处理）",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 405.7,
+              "status": null
+            },
+            "auth": {
+              "ok": null,
+              "verdict": "unknown",
+              "verdict_text": "该通路未实现列模型端点（404），本次不下结论：HTTP 404：HTTP 404 Not Found",
+              "severity": "unknown",
+              "latency_ms": 594.3,
+              "status": 404
+            },
+            "model": {
+              "ok": null,
+              "verdict": "unknown",
+              "verdict_text": "2 个模型均未下结论：鉴权未通过，本次不核对模型列表（由鉴权层下结论）",
+              "severity": "unknown",
+              "latency_ms": 594.3,
+              "status": 404,
+              "checked_at_utc": "2026-10-28T12:28:33+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 404,
+          "latency_ms": 594.3,
+          "base_url": "https://api.coderplan.ai",
+          "model": "grok-4.7",
+          "key_masked": "sk-H…",
+          "models_total": 2,
+          "models_ok": 0,
+          "models": {
+            "grok-4.7": {
+              "ok": null,
+              "verdict": "unknown",
+              "severity": "unknown",
+              "detail": "鉴权未通过，本次不核对模型列表（由鉴权层下结论）",
+              "method": "models_list",
+              "status": 404,
+              "latency_ms": 594.3
+            },
+            "grok-4.6": {
+              "ok": null,
+              "verdict": "unknown",
+              "severity": "unknown",
+              "detail": "鉴权未通过，本次不核对模型列表（由鉴权层下结论）",
+              "method": "models_list",
+              "status": 404,
+              "latency_ms": 594.3
+            }
+          }
+        },
+        "OpenRouter": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 17.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 44.4,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 44.4,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:34+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 44.4,
+          "base_url": "https://openrouter.ai/api/v1",
+          "model": "x-ai/grok-4.7",
+          "key_masked": "sk-o…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "grok-4.7": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（x-ai/grok-4.7）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 44.4
+            },
+            "grok-4.6": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（x-ai/grok-4.6）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 44.4
+            }
+          }
+        },
+        "Official": {
+          "ok": true,
+          "severity": "green",
+          "verdict": "ok",
+          "verdict_text": "三层检查均通过",
+          "checks": {
+            "network": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "网络可达",
+              "severity": "green",
+              "latency_ms": 20.2,
+              "status": null
+            },
+            "auth": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "鉴权通过（HTTP 200）",
+              "severity": "green",
+              "latency_ms": 121.3,
+              "status": 200
+            },
+            "model": {
+              "ok": true,
+              "verdict": "ok",
+              "verdict_text": "2/2 个模型可用（模型列表，只做非生成校验）",
+              "severity": "green",
+              "latency_ms": 121.3,
+              "status": 200,
+              "checked_at_utc": "2026-10-28T12:28:35+00:00",
+              "method": "models_list"
+            }
+          },
+          "model_check_method": "models_list",
+          "status": 200,
+          "latency_ms": 121.3,
+          "base_url": "https://api.x.ai/v1",
+          "model": "grok-4.7",
+          "key_masked": "xai-…",
+          "models_total": 2,
+          "models_ok": 2,
+          "models": {
+            "grok-4.7": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（grok-4.7）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 121.3
+            },
+            "grok-4.6": {
+              "ok": true,
+              "verdict": "ok",
+              "severity": "green",
+              "detail": "模型在官方模型列表里（grok-4.6）（只做非生成校验，不发真实调用）",
+              "method": "models_list",
+              "status": 200,
+              "latency_ms": 121.3
+            }
+          }
+        }
+      },
+      "probe_model": "grok-4.7",
+      "models_total": 2,
+      "models_ok": 2
+    }
+  },
+  "summary": {
+    "green": [
+      "claude/Proxy 1 Base",
+      "claude/Proxy 1 Prime",
+      "claude/Proxy 1 Max",
+      "claude/Proxy 2",
+      "claude/Official",
+      "gemini/Gemini Proxy 2",
+      "gemini/OpenRouter",
+      "gemini/Official",
+      "deepseek/Official",
+      "deepseek/OpenRouter",
+      "gpt/GPT Proxy",
+      "gpt/OpenRouter",
+      "gpt/OpenAI",
+      "glm/Official",
+      "glm/OpenRouter",
+      "magmarouter/MagmaRouter",
+      "openrouter/OpenRouter",
+      "grok/Grok Proxy",
+      "grok/OpenRouter",
+      "grok/Official"
+    ],
+    "warn": [
+      "gemini/Gemini Proxy",
+      "deepseek/Fireworks DeepSeek Pro"
+    ],
+    "red": [],
+    "not_configured": []
+  }
+}
