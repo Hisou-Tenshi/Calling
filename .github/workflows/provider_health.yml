@@ -108,6 +108,15 @@ jobs:
           token: ${{ secrets.REACHABILITY_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      # 同步到 main 最新：workflow_dispatch 的 event SHA 可能落后；探活结果要写回 main，
+      # 不先对齐会在 push 时与上一次运行刚提交的结果冲突（探活产物是快照，合并会造混合数据）。
+      - name: Sync Calling checkout to latest main
+        if: github.ref_name == 'main'
+        run: |
+          set -uo pipefail
+          git fetch origin main
+          git reset --hard origin/main
+
       # 再 checkout Tenshi 到 tenshi/：只为了跑 scripts/ 下的探活与 dashboard 脚本。
       # 注意：这里只读 Tenshi 代码，任何结果都不要写进 tenshi/（否则会污染 Tenshi 检出）。
       - name: Checkout Tenshi (脚本来源，只读)

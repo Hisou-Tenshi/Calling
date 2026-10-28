@@ -104,6 +104,17 @@ TIER_BUDGET = {
 # 推 main 的档位（其余走独立分支）。
 DIRECT_TIERS = ("reply", "summary", "perceive")
 
+# 快照 / 派生产物：冲突时直接保留「本分支」（= 最新一次运行）版本即可，**不能**
+# 做无损 union。理由：
+#   · data/provider_health.json 是「最新一次探活」的快照，把两次 run 的 paths 合并会
+#     造出「时间戳/run_id 属于 A、内容混进 B 的路径」的混合体（2026-10-28 双 dispatch
+#     实际踩到：run_id 还是旧的，却多出一条来自另一次 run 的路径）；
+#   · reports/provider_health/ 下是每次 run 重新生成的报告 / dashboard / history，
+#     取最新一份即可（history 的合并宁可靠 append_history 自己按行去重）。
+# 这些路径不属于「日志类只能追加」的数据，所以不走 JSON 无损合并。
+LOCAL_WINS_PATHS = ("data/provider_health.json",)
+LOCAL_WINS_PREFIXES = ("reports/provider_health/",)
+
 # git 提交身份。这不是随便填的：本仓库把 git 历史当作角色的痕迹，
 # persona.py 里 ROLE_GIT_NAME/ROLE_GIT_EMAIL 就是「天子」这个身份的登记处
 # （persona.py 的注释特别点名了 workflow 的 git 身份）。
@@ -377,9 +388,49 @@ def _is_json_valid(text: str) -> bool:
         return False
 
 
+def _is_json_lines(text: str) -> bool:
+    """每一行都是合法 JSON（JSONL）——注意空文件、半截行都不算。"""
+    import json
+
+    lines = [line for line in text.splitlines() if line.strip()]
+    if not lines:
+        return False
+    for line in lines:
+        try:
+            json.loads(line)
+        except Exception:
+            return False
+    return True
+
+
+def _merge_json_lines(ours_text: str, theirs_text: str) -> list[str]:
+    """JSONL 合并：两侧按行取并集（保序，先远端后本分支新增行）。
+
+    JSONL 是「一条记录一行」的追加日志：两边各追加了不同的行时，行级 union 才是
+    无损的。若当整份 JSON 做 dict 合并，会把两条记录合并成一条（字段互相覆盖）。
+    """
+    ours = [line for line in ours_text.splitlines() if line.strip()]
+    theirs = [line for line in theirs_text.splitlines() if line.strip()]
+    merged = list(ours)
+    seen = set(ours)
+    for line in theirs:
+        if line not in seen:
+            merged.append(line)
+            seen.add(line)
+    return merged
+
+
 def _line_merge(ours_text: str, base_text: str, theirs_text: str, label: str) -> list[str] | None:
     """三方合并；失败返回 None（调用方退回保守策略）。"""
-    if _is_json_like(ours_text) and _is_json_like(theirs_text):
+    ours_doc = _is_json_valid(ours_text)
+    theirs_doc = _is_json_valid(theirs_text)
+
+    # JSONL（history.jsonl / llm_trace.jsonl 等）按行取并集，不能当整份 JSON 合并。
+    if label.endswith(".jsonl") and _is_json_lines(ours_text) and _is_json_lines(theirs_text):
+        log(f"{label}：按 JSONL 行并集合并")
+        return _merge_json_lines(ours_text, theirs_text)
+
+    if _is_json_like(ours_text) and _is_json_like(theirs_text) and ours_doc and theirs_doc:
         structured = _json_text_merge(ours_text, theirs_text, label)
         if structured is not None:
             return structured
@@ -435,9 +486,9 @@ def _line_merge(ours_text: str, base_text: str, theirs_text: str, label: str) ->
         warn(f"{label}：行级合并会丢掉某一侧的内容，放弃自动合并")
         return None
 
-    # 结构化 JSON 走行级拼合有概率拼出非法 JSON（数组里两个元素在同一行冲突）。
+    # 整份 JSON 走行级拼合有概率拼出非法 JSON（数组里两个元素在同一行冲突）。
     # 宁可退回「只保留本分支」，也不能把坏掉的 JSON 写进仓库。
-    if _is_json_like(ours_text) and _is_json_like(theirs_text) and not _is_json_valid("\n".join(merged)):
+    if ours_doc and theirs_doc and not _is_json_valid("\n".join(merged)):
         warn(f"{label}：行级合并结果不是合法 JSON，放弃自动合并")
         return None
     return merged
@@ -452,16 +503,38 @@ def _write_merged(repo: Repo, path: str, merged: list[str], stages: dict[int, st
 
 
 def _keep_branch_version(repo: Repo, path: str) -> None:
-    """保守兜底：保留本分支（rebase 中的 stage#3）版本，并保证文件在索引里。"""
+    """保守兜底：保留本分支（rebase 中的 stage#3）版本，并保证文件在索引里。
+
+    ⚠️ 关键：rebase 冲突时**工作区里的文件是 git 写好的冲突标记**。旧实现直接
+    `git add`，会把 `<<<<<<<` / `=======` / `>>>>>>>` 原样提交进仓库
+    （2026-10-28 探活产物 dashboard.html / latest.md / history.jsonl 实际踩到）。
+    所以这里先从索引 stage#3 取回「本分支」的干净版本；取不到才退回工作区，
+    并且必须先把冲突标记拍平，绝不把标记写进仓库。
+    """
     target = repo.path / path
-    if target.exists():
+    checkout = repo.git("checkout", "--theirs", "--", path, check=False)
+    if checkout.returncode == 0 and target.exists():
         repo.git("add", "--sparse", "--", path)
         warn(f"无法自动合并，保留本分支内容：{path}")
-    else:
-        # 本分支没有这个文件（对侧新增）→ 采用对侧版本，不要把它删掉。
-        repo.git("checkout", "--theirs", "--", path, check=False)
-        repo.git("add", "--sparse", "--", path, check=False)
-        warn(f"无法自动合并，采用远端新增内容：{path}")
+        return
+    if target.exists():
+        try:
+            raw = target.read_bytes()
+        except OSError:
+            raw = b""
+        if b"\x00" in raw[:8192]:
+            repo.git("add", "--sparse", "--", path)
+            warn(f"无法自动合并，保留本分支二进制内容：{path}")
+            return
+        text = raw.decode("utf-8", errors="replace")
+        cleaned = _flatten_conflicts(_lines(text))
+        target.write_text("\n".join(cleaned) + ("\n" if cleaned else ""), encoding="utf-8")
+        repo.git("add", "--sparse", "--", path)
+        warn(f"无法自动合并，保留本分支内容（已清理冲突标记）：{path}")
+        return
+    repo.git("checkout", "--theirs", "--", path, check=False)
+    repo.git("add", "--sparse", "--", path, check=False)
+    warn(f"无法自动合并，采用对侧版本：{path}")
 
 
 def _parse_unmerged(repo: Repo) -> dict[str, dict[int, str]]:
@@ -492,6 +565,11 @@ def _resolve_conflicts(repo: Repo, resolved: set[str]) -> bool:
             # 继续自动合并不安全，交给上层 abort 后重来。
             seen_before = True
             warn(f"冲突在本轮重复出现，停止自动处理：{path}")
+            continue
+        if path in LOCAL_WINS_PATHS or path.startswith(LOCAL_WINS_PREFIXES):
+            # 快照 / 派生产物：不参与「无损合并」，保留最新一次运行（本分支）的版本。
+            _keep_branch_version(repo, path)
+            resolved.add(path)
             continue
         if _is_binary_path(path):
             _keep_branch_version(repo, path)
