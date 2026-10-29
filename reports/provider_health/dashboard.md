@@ -1,10 +1,10 @@
 # Provider 探活面板
 
-> ⚠️ **全部通路可用；1 条标黄（照常调用，不 ban）** · 共 22 条通路 · 8 个类别
+> ❌ **存在 1 条红通路（运行时在最外层 ban 掉；其余通路照常调用）** · 共 23 条通路 · 8 个类别
 
 - 部署：**Calling primary 运行时（Calling secrets）**
-- 生成时间：`2026-10-29 11:02:38`（北京时间 UTC+8） / `2026-10-29T03:02:38+00:00`（UTC）
-- 环境：容器 · run `40809537972` · schema 4
+- 生成时间：`2026-10-29 19:53:28`（北京时间 UTC+8） / `2026-10-29T11:53:28+00:00`（UTC）
+- 环境：容器 · run `40868427593` · schema 4
 - 探活方式：不真实调用模型（官方非生成端点：DNS/TCP/TLS → 列模型鉴权 → 模型列表 / count tokens）
 - 全模型覆盖：**26 / 27**（96.3%）
 
@@ -12,79 +12,80 @@
 
 | 类别 | 通路数 | 绿 | 黄 | 红 | 未配置 | 模型覆盖 | 结论 |
 |---|---|---|---|---|---|---|---|
-| `claude` | 5 | 5 | 0 | 0 | 0 | 7/7 | ✅ 全部可用 |
+| `claude` | 6 | 6 | 0 | 0 | 0 | 7/7 | ✅ 全部可用 |
 | `gemini` | 4 | 4 | 0 | 0 | 0 | 6/6 | ✅ 全部可用 |
-| `deepseek` | 3 | 2 | 1 | 0 | 0 | 2/2 | ⚠️ 1 条黄 |
+| `deepseek` | 3 | 2 | 0 | 1 | 0 | 2/2 | ❌ 1 条红 |
 | `gpt` | 3 | 3 | 0 | 0 | 0 | 1/1 | ✅ 全部可用 |
 | `glm` | 2 | 2 | 0 | 0 | 0 | 2/2 | ✅ 全部可用 |
 | `magmarouter` | 1 | 1 | 0 | 0 | 0 | 5/6 | ✅ 全部可用 |
 | `openrouter` | 1 | 1 | 0 | 0 | 0 | 1/1 | ✅ 全部可用 |
 | `grok` | 3 | 3 | 0 | 0 | 0 | 2/2 | ✅ 全部可用 |
-| **合计** | 22 | 21 | 1 | 0 | 0 | 26/27 | ⚠️ |
+| **合计** | 23 | 22 | 0 | 1 | 0 | 26/27 | ❌ |
 
 ## 通路 × 模型矩阵
 
-### `claude` · ✅ 全部可用（绿 5 / 黄 0 / 红 0 / 未配置 0）
+### `claude` · ✅ 全部可用（绿 6 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | claude-opus-5-5 | claude-opus-5 | claude-sonnet-5-5 | claude-sonnet-5 | claude-haiku-4-5 | claude-haiku-4-5-20251001 | claude-haiku-5-5 | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|---|
-| `Proxy 1 Base` | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 288.4 ms |
-| `Proxy 1 Prime` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 269.6 ms |
-| `Proxy 1 Max` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ 可用 | 254.9 ms |
-| `Proxy 2` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 784.1 ms |
-| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 177.3 ms |
+| `Proxy 1 Base` | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ 可用 | 186.7 ms |
+| `Proxy 1 Prime` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ 可用 | 185.1 ms |
+| `Proxy 1 Max` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ 可用 | 245.5 ms |
+| `Proxy 2` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 733 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ 可用 | 427.1 ms |
+| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 169 ms |
 
 ### `gemini` · ✅ 全部可用（绿 4 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | gemini-4-argon | gemini-3.1-pro-preview | gemini-3.8-flash | gemini-3.7-flash | gemini-3.5-flash-lite | gemini-3.1-flash-lite | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|
-| `Gemini Proxy` | ⚠️ | ⚠️ | ✅ | ⚠️ | ⚠️ | ⚠️ | ✅ 可用 | 311.3 ms |
-| `Gemini Proxy 2` | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ | ✅ | ✅ 可用 | 775.5 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 409.5 ms |
-| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 190.5 ms |
+| `Gemini Proxy` | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ 可用 | 248.3 ms |
+| `Gemini Proxy 2` | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ 可用 | 710.6 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 51.2 ms |
+| `Official` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ 可用 | 105.8 ms |
 
-### `deepseek` · ⚠️ 1 条黄（绿 2 / 黄 1 / 红 0 / 未配置 0）
+### `deepseek` · ❌ 1 条红（绿 2 / 黄 0 / 红 1 / 未配置 0）
 
 | 通路 | deepseek-v4-pro | deepseek-flash | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Official` | ✅ | ✅ | ✅ 可用 | 319.6 ms |
-| `Fireworks DeepSeek Pro` | ⚠️ | ⚠️ | ⚠️ 模型不可用 | 306.1 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 56.9 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 330.2 ms |
+| `Fireworks DeepSeek Pro` | ❌ | ❌ | ❌ 模型不可用（模型级 ban） | 295.3 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 42 ms |
 
 ### `gpt` · ✅ 全部可用（绿 3 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | gpt-6-luna | 结论 | 延迟 |
 |---|---|---|---|
-| `GPT Proxy` | ✅ | ✅ 可用 | 779.6 ms |
-| `OpenRouter` | ✅ | ✅ 可用 | 59.9 ms |
-| `OpenAI` | ✅ | ✅ 可用 | 1122.3 ms |
+| `GPT Proxy` | ✅ | ✅ 可用 | 733.1 ms |
+| `OpenRouter` | ✅ | ✅ 可用 | 47.8 ms |
+| `OpenAI` | ✅ | ✅ 可用 | 980 ms |
 
 ### `glm` · ✅ 全部可用（绿 2 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | glm-5.3 | glm-5.3-flash | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Official` | ✅ | ✅ | ✅ 可用 | 335.6 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 54.4 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 325.3 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 41.5 ms |
 
 ### `magmarouter` · ✅ 全部可用（绿 1 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | deepseek-v4.1-flash-1017-xploded | glm-5.3-flash-xploded | glm-5.3-xploded | qwen3.8-27b-xploded | magma-1-xploded | mimo-v2.6-flash-xploded | 结论 | 延迟 |
 |---|---|---|---|---|---|---|---|---|
-| `MagmaRouter` | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ 可用 | 630.8 ms |
+| `MagmaRouter` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ 可用 | 495.6 ms |
 
 ### `openrouter` · ✅ 全部可用（绿 1 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | cognitivecomputations/dolphin-mistral-24b-venice-edition | 结论 | 延迟 |
 |---|---|---|---|
-| `OpenRouter` | ✅ | ✅ 可用 | 65.8 ms |
+| `OpenRouter` | ✅ | ✅ 可用 | 46.5 ms |
 
 ### `grok` · ✅ 全部可用（绿 3 / 黄 0 / 红 0 / 未配置 0）
 
 | 通路 | grok-4.7 | grok-4.6 | 结论 | 延迟 |
 |---|---|---|---|---|
-| `Grok Proxy` | ✅ | ✅ | ✅ 可用 | 777.4 ms |
-| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 63.2 ms |
-| `Official` | ✅ | ✅ | ✅ 可用 | 110.3 ms |
+| `Grok Proxy` | ✅ | ✅ | ✅ 可用 | 738.8 ms |
+| `OpenRouter` | ✅ | ✅ | ✅ 可用 | 47.8 ms |
+| `Official` | ✅ | ✅ | ✅ 可用 | 158.6 ms |
 
 ## 最近历史（最近 12 次）
 
@@ -97,33 +98,35 @@
 | 2026-10-29 01:35:21 | ✅ | ❌ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 2026-10-29 05:57:33 | ✅ | ❌ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 2026-10-29 11:02:38 | ✅ | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 2026-10-29 19:53:28 | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **通路历史可用率**（可用 = 绿 + 黄；红才算不可用，分母是有结论的次数）：
 
 | 通路 | 可用率 | 可用/观测 |
 |---|---|---|
-| `claude / Proxy 1 Base` | 100% | 7/7 |
-| `claude / Proxy 1 Prime` | 100% | 7/7 |
-| `claude / Proxy 1 Max` | 100% | 7/7 |
-| `claude / Proxy 2` | 100% | 7/7 |
-| `claude / Official` | 100% | 7/7 |
-| `gemini / Gemini Proxy` | 71% | 5/7 |
-| `gemini / Gemini Proxy 2` | 100% | 7/7 |
-| `gemini / OpenRouter` | 100% | 7/7 |
-| `gemini / Official` | 100% | 7/7 |
-| `deepseek / Official` | 100% | 7/7 |
-| `deepseek / Fireworks DeepSeek Pro` | 100% | 7/7 |
-| `deepseek / OpenRouter` | 100% | 7/7 |
-| `gpt / GPT Proxy` | 100% | 7/7 |
-| `gpt / OpenRouter` | 100% | 7/7 |
-| `gpt / OpenAI` | 100% | 7/7 |
-| `glm / Official` | 100% | 7/7 |
-| `glm / OpenRouter` | 100% | 7/7 |
-| `magmarouter / MagmaRouter` | 100% | 7/7 |
-| `openrouter / OpenRouter` | 100% | 7/7 |
-| `grok / Grok Proxy` | 100% | 7/7 |
-| `grok / OpenRouter` | 100% | 7/7 |
-| `grok / Official` | 100% | 7/7 |
+| `claude / Proxy 1 Base` | 100% | 8/8 |
+| `claude / Proxy 1 Prime` | 100% | 8/8 |
+| `claude / Proxy 1 Max` | 100% | 8/8 |
+| `claude / Proxy 2` | 100% | 8/8 |
+| `claude / Official` | 100% | 8/8 |
+| `gemini / Gemini Proxy` | 75% | 6/8 |
+| `gemini / Gemini Proxy 2` | 100% | 8/8 |
+| `gemini / OpenRouter` | 100% | 8/8 |
+| `gemini / Official` | 100% | 8/8 |
+| `deepseek / Official` | 100% | 8/8 |
+| `deepseek / Fireworks DeepSeek Pro` | 88% | 7/8 |
+| `deepseek / OpenRouter` | 100% | 8/8 |
+| `gpt / GPT Proxy` | 100% | 8/8 |
+| `gpt / OpenRouter` | 100% | 8/8 |
+| `gpt / OpenAI` | 100% | 8/8 |
+| `glm / Official` | 100% | 8/8 |
+| `glm / OpenRouter` | 100% | 8/8 |
+| `magmarouter / MagmaRouter` | 100% | 8/8 |
+| `openrouter / OpenRouter` | 100% | 8/8 |
+| `grok / Grok Proxy` | 100% | 8/8 |
+| `grok / OpenRouter` | 100% | 8/8 |
+| `grok / Official` | 100% | 8/8 |
+| `claude / OpenRouter` | 100% | 1/1 |
 
 ## 图例与说明
 
