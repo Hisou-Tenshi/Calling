@@ -1,7 +1,7 @@
 # 全通路探活报告
 
-- 时间：`2026-10-30 11:08:00`（北京时间 UTC+8） / `2026-10-30T03:08:00+00:00`（UTC）
-- 环境：容器 · run `40995265794`
+- 时间：`2026-10-30 19:46:41`（北京时间 UTC+8） / `2026-10-30T11:46:41+00:00`（UTC）
+- 环境：容器 · run `41050101000`
 - 部署：`calling` · Calling primary 运行时（Calling secrets）
 - 方式：**不真实调用模型**（官方非生成端点：DNS/TCP/TLS → 列模型鉴权 → 全模型 模型列表 / count tokens 校验）
 - 覆盖：claude（6 条 / 7 个模型）, gemini（4 条 / 6 个模型）, deepseek（3 条 / 2 个模型）, gpt（3 条 / 1 个模型）, glm（2 条 / 2 个模型）, magmarouter（1 条 / 6 个模型）, openrouter（1 条 / 1 个模型）, grok（3 条 / 2 个模型）
@@ -23,29 +23,29 @@
 
 | 类别 | 通路 | 代表模型 | 结论 | 网络 | 鉴权 | 模型校验 | 模型 | 延迟 | 说明 |
 |---|---|---|---|---|---|---|---|---|---|
-| `claude` | Proxy 1 Base | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/7 | 839.1 ms | 三层检查均通过 |
-| `claude` | Proxy 1 Prime | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 618.2 ms | 三层检查均通过 |
-| `claude` | Proxy 1 Max | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 361.4 ms | 三层检查均通过 |
-| `claude` | Proxy 2 | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 7/7 | 625.7 ms | 三层检查均通过 |
-| `claude` | OpenRouter | `anthropic/claude-haiku-4.5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 847.9 ms | 三层检查均通过 |
-| `claude` | Official | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 7/7 | 182.5 ms | 三层检查均通过 |
-| `gemini` | Gemini Proxy | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/6 | 1152.0 ms | 三层检查均通过 |
-| `gemini` | Gemini Proxy 2 | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 3/6 | 606.5 ms | 三层检查均通过 |
-| `gemini` | OpenRouter | `google/gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/6 | 63.9 ms | 三层检查均通过 |
-| `gemini` | Official | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/6 | 122.7 ms | 三层检查均通过 |
-| `deepseek` | Official | `deepseek-flash` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 304.0 ms | 三层检查均通过 |
-| `deepseek` | Fireworks DeepSeek Pro | `accounts/fireworks/models/deepseek-v4-flash` | ❌ 模型不可用（模型级 ban） | ✅ | ✅ | ❌（列表） | 0/2 | 216.9 ms | model: 2/2 个模型不可用：模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-pro，列表 29 个）（只做非生成校验，不发真实调用）；该「通路×模型」组合按红处理，运行时模型级 ban |
-| `deepseek` | OpenRouter | `deepseek/deepseek-v4.1-flash-1017` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 59.6 ms | 三层检查均通过 |
-| `gpt` | GPT Proxy | `gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 613.4 ms | 三层检查均通过 |
-| `gpt` | OpenRouter | `openai/gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 52.3 ms | 三层检查均通过 |
-| `gpt` | OpenAI | `gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 923.5 ms | 三层检查均通过 |
-| `glm` | Official | `glm-5.3` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 195.5 ms | 三层检查均通过 |
-| `glm` | OpenRouter | `z-ai/glm-5.3` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 45.5 ms | 三层检查均通过 |
-| `magmarouter` | MagmaRouter | `deepseek-v4.1-flash-1017-xploded` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/6 | 478.0 ms | 三层检查均通过 |
-| `openrouter` | OpenRouter | `cognitivecomputations/dolphin-mistral-24b-venice-edition` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 47.9 ms | 三层检查均通过 |
-| `grok` | Grok Proxy | `grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 624.7 ms | 三层检查均通过 |
-| `grok` | OpenRouter | `x-ai/grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 51.7 ms | 三层检查均通过 |
-| `grok` | Official | `grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 95.2 ms | 三层检查均通过 |
+| `claude` | Proxy 1 Base | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/7 | 178.8 ms | 三层检查均通过 |
+| `claude` | Proxy 1 Prime | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 213.3 ms | 三层检查均通过 |
+| `claude` | Proxy 1 Max | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 192.1 ms | 三层检查均通过 |
+| `claude` | Proxy 2 | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 7/7 | 759.9 ms | 三层检查均通过 |
+| `claude` | OpenRouter | `anthropic/claude-haiku-4.5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/7 | 240.7 ms | 三层检查均通过 |
+| `claude` | Official | `claude-haiku-4-5` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 7/7 | 134.6 ms | 三层检查均通过 |
+| `gemini` | Gemini Proxy | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/6 | 246.4 ms | 三层检查均通过 |
+| `gemini` | Gemini Proxy 2 | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 3/6 | 762.0 ms | 三层检查均通过 |
+| `gemini` | OpenRouter | `google/gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/6 | 44.9 ms | 三层检查均通过 |
+| `gemini` | Official | `gemini-3.5-flash-lite` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 6/6 | 116.7 ms | 三层检查均通过 |
+| `deepseek` | Official | `deepseek-flash` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 312.7 ms | 三层检查均通过 |
+| `deepseek` | Fireworks DeepSeek Pro | `accounts/fireworks/models/deepseek-v4-flash` | ❌ 模型不可用（模型级 ban） | ✅ | ✅ | ❌（列表） | 0/2 | 275.7 ms | model: 2/2 个模型不可用：模型不在该通路的模型列表里（探测 accounts/fireworks/models/deepseek-v4-pro，列表 29 个）（只做非生成校验，不发真实调用）；该「通路×模型」组合按红处理，运行时模型级 ban |
+| `deepseek` | OpenRouter | `deepseek/deepseek-v4.1-flash-1017` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 43.0 ms | 三层检查均通过 |
+| `gpt` | GPT Proxy | `gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 764.9 ms | 三层检查均通过 |
+| `gpt` | OpenRouter | `openai/gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 49.6 ms | 三层检查均通过 |
+| `gpt` | OpenAI | `gpt-6-luna` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 1149.9 ms | 三层检查均通过 |
+| `glm` | Official | `glm-5.3` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 318.1 ms | 三层检查均通过 |
+| `glm` | OpenRouter | `z-ai/glm-5.3` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 37.0 ms | 三层检查均通过 |
+| `magmarouter` | MagmaRouter | `deepseek-v4.1-flash-1017-xploded` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 5/6 | 506.7 ms | 三层检查均通过 |
+| `openrouter` | OpenRouter | `cognitivecomputations/dolphin-mistral-24b-venice-edition` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 1/1 | 49.4 ms | 三层检查均通过 |
+| `grok` | Grok Proxy | `grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 764.6 ms | 三层检查均通过 |
+| `grok` | OpenRouter | `x-ai/grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 48.0 ms | 三层检查均通过 |
+| `grok` | Official | `grok-4.7` | ✅ 可用 | ✅ | ✅ | ✅（列表） | 2/2 | 107.7 ms | 三层检查均通过 |
 
 ## 全模型矩阵
 
