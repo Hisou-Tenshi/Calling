@@ -33,10 +33,16 @@
 #    回复任务跑在 ghcr.io/hisou-tenshi/calling-tenshi:latest 里，容器的 DNS / 出网 /
 #    证书信任链与宿主 runner 不同 —— 只在宿主上探会得出「一切正常」而容器里可能全灭。
 #
-#  覆盖（按「类别 + 通路」，不按模型名）：
-#    claude 代理1 Base/Prime/Max · 代理2 · 官方 ｜ gemini 官方 · 代理 ｜
+#  覆盖（按「类别 + 通路」，逐模型非生成校验该 provider 的全部模型）：
+#    claude 代理1 Base/Prime/Max · 代理2 · OpenRouter(anthropic/) · 官方 ｜ gemini 官方 · 代理 ｜
 #    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ magmarouter 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
+#
+#  判定语义（2026-10-29 起）：
+#    · 通路级红（key 被拒 / 网络不通）→ 运行时整条通路 ban；
+#    · 模型级红（model_not_found，如代理账号组没挂该模型）→ **模型级 ban**：
+#      运行时跳过该「通路 × 模型」组合（provider_health.model_path_state），不再报黄照跑；
+#    · 限流（429）仍是黄档 fail-open；拿不到结论（unknown）照旧放行。
 #
 #  **不真实调用模型**（2026-10 调整）：
 #    探活不再发送任何会产出 token 的生成请求（不创建消息、不调 chat 补全 / generateContent），
