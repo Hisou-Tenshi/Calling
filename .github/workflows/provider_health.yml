@@ -34,8 +34,9 @@
 #    证书信任链与宿主 runner 不同 —— 只在宿主上探会得出「一切正常」而容器里可能全灭。
 #
 #  覆盖（按「类别 + 通路」，逐模型非生成校验该 provider 的全部模型）：
-#    claude 代理1 Base/Prime/Max · 代理2 · OpenRouter(anthropic/) · 官方 ｜ gemini 官方 · 代理 ｜
-#    deepseek 官方 · Fireworks 代理 ｜ gpt 官方 ｜ magmarouter 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
+#    claude 代理1 Base/Prime/Max · 代理2 · OpenRouter(anthropic/) · 官方 ｜ gemini 官方 · 代理1 · 代理2 · OpenRouter ｜
+#    deepseek 官方 · OpenRouter（Fireworks 代理已停用，显式配置 URL/key 可复活）｜
+#    gpt 官方 · 代理1(codeyu) · 代理2(coderplan) · OpenRouter ｜ magmarouter 官方 ｜ openrouter 官方 ｜ grok 官方 · 代理
 #    通路清单直接来自 Tenshi 自己的 path builder（llm_routing），与运行时一一对应。
 #
 #  判定语义（2026-10-29 起）：
@@ -175,6 +176,8 @@ jobs:
           # GPT 代理 1
           GPT_PROXY_BASE_URL: ${{ secrets.GPT_PROXY_BASE_URL }}
           GPT_PROXY_KEY: ${{ secrets.GPT_PROXY_KEY }}
+          GPT_PROXY2_BASE_URL: ${{ secrets.GPT_PROXY2_BASE_URL }}
+          GPT_PROXY2_KEY: ${{ secrets.GPT_PROXY2_KEY }}
           # DeepSeek
           DEEPSEEK_BASE_URL: ${{ secrets.DEEPSEEK_BASE_URL }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

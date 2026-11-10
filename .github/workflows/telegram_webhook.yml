@@ -195,6 +195,8 @@ jobs:
           GEMINI_PROXY2_KEY: ${{ secrets.GEMINI_PROXY2_KEY }}
           GPT_PROXY_BASE_URL: ${{ secrets.GPT_PROXY_BASE_URL }}
           GPT_PROXY_KEY: ${{ secrets.GPT_PROXY_KEY }}
+          GPT_PROXY2_BASE_URL: ${{ secrets.GPT_PROXY2_BASE_URL }}
+          GPT_PROXY2_KEY: ${{ secrets.GPT_PROXY2_KEY }}
           GROK_BASE_URL: ${{ secrets.GROK_BASE_URL }}
           GROK_PROXY_BASE_URL: ${{ secrets.GROK_PROXY_BASE_URL }}
           GROK_PROXY_KEY: ${{ secrets.GROK_PROXY_KEY }}

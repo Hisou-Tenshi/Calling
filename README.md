@@ -389,7 +389,7 @@ Calling/
   这类交给运行时的超时 + 逐档降级兜底。
 
 覆盖 claude（代理1 Base/Prime/Max · 代理2 · 官方）、gemini（代理1/代理2/OpenRouter/官方）、
-deepseek（官方/Fireworks/OpenRouter）、gpt（代理/OpenRouter/官方）、grok（代理/OpenRouter/官方）、
+deepseek（官方/OpenRouter；Fireworks 代理已停用，仅留壳）、gpt（代理1/代理2/OpenRouter/官方）、grok（代理/OpenRouter/官方）、
 glm（官方/OpenRouter）、magmarouter、openrouter 的**全部通路**——通路顺序直接复用 Tenshi 的
 `config/providers.py PROVIDER_PATH_POLICIES` 与 `llm_routing.build_*_paths()`，探的就是跑的。
 每条通路再按 Tenshi 模型注册表把**该 provider 的全部模型**逐一核对（含 Claude 的日期快照），
@@ -399,7 +399,7 @@ glm（官方/OpenRouter）、magmarouter、openrouter 的**全部通路**——�
 只在宿主上探会得出「一切正常」而容器里可能全灭）。
 
 运行前确保本仓库 Secrets 已注入新增的渠道/代理变量（与 Tenshi `.env.example` 的 [C] 段同名）：
-`GEMINI_PROXY2_BASE_URL/KEY`、`GPT_PROXY_BASE_URL/KEY`、`GROK_PROXY_BASE_URL/KEY`、
+`GEMINI_PROXY2_BASE_URL/KEY`、`GPT_PROXY_BASE_URL/KEY`、`GPT_PROXY2_BASE_URL/KEY`、`GROK_PROXY_BASE_URL/KEY`、
 `CODERPLAN_PROXY_BASE_URL`、`CLAUDE_OFFICIAL_BASE_URL`、`GEMINI_OFFICIAL_BASE_URL`、
 `DEEPSEEK_BASE_URL`、`QWEN_BASE_URL`、`OPENROUTER_FALLBACK_MAP` 等；
 改完可跑 Tenshi 的 `scripts/check_env_matrix.py --strict` 校验矩阵是否完整。
